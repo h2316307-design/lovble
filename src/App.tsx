@@ -12,7 +12,6 @@ import Contracts from "./pages/Contracts";
 import ContractCreate from "./pages/ContractCreate";
 import ContractEdit from "./pages/ContractEdit";
 import Billboards from "./pages/Billboards";
-import Bookings from "./pages/Bookings";
 import Users from "./pages/Users";
 import PricingList from "./pages/PricingList";
 import Settings from "./pages/Settings";
@@ -20,6 +19,8 @@ import Reports from "./pages/Reports";
 import InstallationPricing from "./pages/InstallationPricing";
 import Customers from "./pages/Customers";
 import BookingRequests from "./pages/BookingRequests";
+import SharedBillboards from "./pages/SharedBillboards";
+import SharedCompanies from "./pages/SharedCompanies";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 
@@ -56,17 +57,24 @@ const App = () => (
                 </MainLayout>
               </ProtectedRoute>
             } />
-            <Route path="/admin/bookings" element={
-              <ProtectedRoute requireAdmin>
-                <MainLayout>
-                  <Bookings />
-                </MainLayout>
-              </ProtectedRoute>
-            } />
             <Route path="/admin/users" element={
               <ProtectedRoute requireAdmin>
                 <MainLayout>
                   <Users />
+                </MainLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/shared-billboards" element={
+              <ProtectedRoute requireAdmin>
+                <MainLayout>
+                  <SharedBillboards />
+                </MainLayout>
+              </ProtectedRoute>
+            } />
+            <Route path="/admin/shared-companies" element={
+              <ProtectedRoute requireAdmin>
+                <MainLayout>
+                  <SharedCompanies />
                 </MainLayout>
               </ProtectedRoute>
             } />

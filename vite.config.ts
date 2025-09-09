@@ -10,9 +10,14 @@ export default defineConfig(({ mode }) => ({
     port: 8080,
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  optimizeDeps: {
+    exclude: ["pdf-lib"]
+  },
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-    },
+    alias: [
+      { find: '@', replacement: path.resolve(__dirname, './src') },
+      // Exact match for 'pako' only (avoid matching 'pako/dist/...')
+      { find: /^pako$/, replacement: path.resolve(__dirname, './src/libs/pako-shim.ts') },
+    ],
   },
 }));

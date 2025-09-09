@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { listRequests, updateRequestStatus } from '@/services/bookingService';
 import type { BookingRequest } from '@/types';
 
-export default function BookingRequestsTable() {
+export function BookingRequestsTable() {
   const [requests, setRequests] = useState<BookingRequest[]>([]);
 
   useEffect(() => {

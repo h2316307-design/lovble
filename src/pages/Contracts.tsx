@@ -1,15 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { getPriceFor, CustomerType, CUSTOMERS } from '@/data/pricing';
 import { Button } from '@/components/ui/button';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { toast } from '@/components/ui/sonner';
 import { Plus, Eye, Edit, Trash2, Calendar, User, DollarSign, Search, Filter, Building, AlertCircle, Clock, CheckCircle } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
   createContract,
   getContracts,
@@ -23,6 +25,7 @@ import {
   ContractCreate
 } from '@/services/contractService';
 import { Billboard } from '@/types';
+import { supabase } from '@/integrations/supabase/client';
 
 export default function Contracts() {
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -30,12 +33,19 @@ export default function Contracts() {
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
+  const [printing, setPrinting] = useState<string | null>(null);
   const location = useLocation();
+  const navigate = useNavigate();
   const [selectedContract, setSelectedContract] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [customerFilter, setCustomerFilter] = useState<string>('all');
-  
+
+  const [customersList, setCustomersList] = useState<{id:string; name:string}[]>([]);
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignContractNumber, setAssignContractNumber] = useState<string | null>(null);
+  const [assignCustomerId, setAssignCustomerId] = useState<string | null>(null);
+
   const [formData, setFormData] = useState<ContractCreate>({
     customer_name: '',
     ad_type: '',
@@ -44,6 +54,8 @@ export default function Contracts() {
     rent_cost: 0,
     billboard_ids: []
   });
+  const [pricingCategory, setPricingCategory] = useState<CustomerType>('عادي');
+  const [durationMonths, setDurationMonths] = useState<number>(3);
 
   const [bbSearch, setBbSearch] = useState('');
 
@@ -53,6 +65,13 @@ export default function Contracts() {
       const billboardsData = await getAvailableBillboards();
       setContracts(contractsData as Contract[]);
       setAvailableBillboards(billboardsData || []);
+      // load customers list
+      try {
+        const { data: cdata, error: cErr } = await supabase.from('customers').select('id,name').order('name', { ascending: true });
+        if (!cErr && Array.isArray(cdata)) setCustomersList(cdata as any);
+      } catch (e) {
+        console.warn('failed to load customers list', e);
+      }
     } catch (error) {
       console.error('خطأ في تحميل البيانات:', error);
       toast.error('فشل في تحميل البيانات');
@@ -64,6 +83,16 @@ export default function Contracts() {
   useEffect(() => {
     loadData();
   }, []);
+
+  // احسب تاريخ النهاية تلقائياً حسب المدة المختارة
+  useEffect(() => {
+    if (!formData.start_date || !durationMonths) return;
+    const d = new Date(formData.start_date);
+    if (isNaN(d.getTime())) return;
+    const end = new Date(d);
+    end.setMonth(end.getMonth() + durationMonths);
+    setFormData(prev => ({ ...prev, end_date: end.toISOString().split('T')[0] }));
+  }, [formData.start_date, durationMonths]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -77,12 +106,12 @@ export default function Contracts() {
   const handleCreateContract = async () => {
     try {
       if (!formData.customer_name || !formData.start_date || !formData.end_date || formData.billboard_ids.length === 0) {
-        toast.error('يرجى ملء جميع الحقول المطلوبة');
+        toast.error('يرجى ملء جميع الحقول المطلو��ة');
         return;
       }
 
       await createContract(formData);
-      toast.success('تم إنشاء العقد بنجاح');
+      toast.success('تم إنشاء ا��عقد بنجاح');
       setCreateOpen(false);
       setFormData({
         customer_name: '',
@@ -123,6 +152,31 @@ export default function Contracts() {
     }
   };
 
+  const openAssignDialog = (contractNumber: string, currentCustomerId?: string | null) => {
+    setAssignContractNumber(contractNumber);
+    setAssignCustomerId(currentCustomerId ?? null);
+    setAssignOpen(true);
+  };
+
+  const saveAssign = async () => {
+    if (!assignContractNumber || !assignCustomerId) {
+      toast.error('اختر زبونًا ثم احفظ');
+      return;
+    }
+    const customer = customersList.find(c => c.id === assignCustomerId);
+    try {
+      await updateContract(assignContractNumber, { customer_id: assignCustomerId, 'Customer Name': customer?.name || '' });
+      toast.success('تم تحديث العميل للعقد');
+      setAssignOpen(false);
+      setAssignContractNumber(null);
+      setAssignCustomerId(null);
+      loadData();
+    } catch (e) {
+      console.error(e);
+      toast.error('فشل تحديث العقد');
+    }
+  };
+
   const getContractStatus = (contract: Contract) => {
     const today = new Date();
     const endDate = new Date(contract.end_date || '');
@@ -157,7 +211,7 @@ export default function Contracts() {
     }
   };
 
-  // تصفية العقود
+  // تصفية العق��د
   const filteredContracts = contracts.filter(contract => {
     const matchesSearch = 
       contract.customer_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -214,17 +268,6 @@ export default function Contracts() {
 
   const uniqueCustomers = [...new Set(contracts.map(c => c.customer_name))].filter(Boolean);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">جاري تحميل العقود...</p>
-        </div>
-      </div>
-    );
-  }
-
   const filteredAvailable = availableBillboards.filter((b) => {
     const q = bbSearch.trim().toLowerCase();
     if (!q) return true;
@@ -236,9 +279,38 @@ export default function Contracts() {
     .map((id) => availableBillboards.find((b) => b.id === id))
     .filter(Boolean)) as Billboard[];
 
+  // حساب التكلفة التقديرية حسب باقات الأسعار والفئة
+  const estimatedTotal = useMemo(() => {
+    const months = Number(durationMonths || 0);
+    if (!months) return 0;
+    return selectedBillboardsDetails.reduce((acc, b) => {
+      const size = (b.size || (b as any).Size || '') as string;
+      const level = (b.level || (b as any).Level) as any;
+      const price = getPriceFor(size, level, pricingCategory as CustomerType, months);
+      if (price !== null) return acc + price;
+      const monthly = Number((b as any).price) || 0;
+      return acc + monthly * months;
+    }, 0);
+  }, [selectedBillboardsDetails, durationMonths, pricingCategory]);
+
+  useEffect(() => {
+    setFormData(prev => ({ ...prev, rent_cost: estimatedTotal }));
+  }, [estimatedTotal]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">جاري تحميل العقود...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6" dir="rtl">
-      {/* العنوان والأزرار */}
+      {/* العن��ان والأزرار */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">إدارة العقود</h1>
@@ -256,122 +328,136 @@ export default function Contracts() {
               <DialogTitle>إنشاء عقد جديد</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 mt-4">
-              <Card className="border">
-                <CardHeader>
-                  <CardTitle className="text-base">بيانات الزبون والحساب</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                    <div className="md:col-span-2">
-                      <Label>اسم الزبون *</Label>
-                      <Input
-                        value={formData.customer_name}
-                        onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })}
-                        placeholder="اسم الزبون"
-                      />
-                    </div>
-                    <div>
-                      <Label>نوع الإعلان</Label>
-                      <Input
-                        value={formData.ad_type}
-                        onChange={(e) => setFormData({ ...formData, ad_type: e.target.value })}
-                        placeholder="نوع الإعلان"
-                      />
-                    </div>
-                    <div>
-                      <Label>تاريخ البداية *</Label>
-                      <Input
-                        type="date"
-                        value={formData.start_date}
-                        onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label>تاريخ النهاية *</Label>
-                      <Input
-                        type="date"
-                        value={formData.end_date}
-                        onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <Label>تكلفة الإيجار *</Label>
-                      <Input
-                        type="number"
-                        value={formData.rent_cost}
-                        onChange={(e) => setFormData({ ...formData, rent_cost: Number(e.target.value) })}
-                        placeholder="التكلفة بالدينار الليبي"
-                      />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {/* العمود الأيسر: بيانات الحجز */}
+                <div className="space-y-4">
+                  <Card className="border">
+                    <CardHeader>
+                      <CardTitle className="text-base">بيانات الحجز</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div>
+                        <Label>اسم الزبون *</Label>
+                        <Input
+                          value={formData.customer_name}
+                          onChange={(e) => setFormData({ ...formData, customer_name: e.target.value })}
+                          placeholder="اسم الزبون"
+                        />
+                      </div>
+                      <div>
+                        <Label>نوع الإعلان</Label>
+                        <Input
+                          value={formData.ad_type}
+                          onChange={(e) => setFormData({ ...formData, ad_type: e.target.value })}
+                          placeholder="نوع الإعلان"
+                        />
+                      </div>
+                      <div>
+                        <Label>ا��فئة السعرية</Label>
+                        <Select value={pricingCategory} onValueChange={(v)=>setPricingCategory(v as CustomerType)}>
+                          <SelectTrigger><SelectValue placeholder="الفئة" /></SelectTrigger>
+                          <SelectContent>
+                            {CUSTOMERS.map(c => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>تاريخ البداية *</Label>
+                        <Input
+                          type="date"
+                          value={formData.start_date}
+                          onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <Label>المدة (بالأشهر)</Label>
+                        <Select value={String(durationMonths)} onValueChange={(v)=>setDurationMonths(Number(v))}>
+                          <SelectTrigger><SelectValue placeholder="اختر المدة" /></SelectTrigger>
+                          <SelectContent>
+                            {[1,2,3,6,12].map(m => (<SelectItem key={m} value={String(m)}>{m}</SelectItem>))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>تاريخ النهاية *</Label>
+                        <Input type="date" value={formData.end_date} readOnly disabled />
+                      </div>
+                      <div>
+                        <Label>التكلف�� التقديرية</Label>
+                        <Input type="number" value={formData.rent_cost} onChange={(e)=>setFormData({...formData, rent_cost: Number(e.target.value)})} />
+                        <div className="text-xs text-muted-foreground mt-1">يتم تحديثها تلقائياً حسب الفئة والمدة وعدد اللوحات</div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card className="border">
-                  <CardHeader>
-                    <CardTitle className="text-base">كل اللوحات المتاحة ({filteredAvailable.length})</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="mb-3">
-                      <Input placeholder="بحث..." value={bbSearch} onChange={(e) => setBbSearch(e.target.value)} />
-                    </div>
-                    <div className="max-h-96 overflow-auto space-y-2">
-                      {filteredAvailable.map((b) => (
-                        <div key={b.id} className="flex items-center justify-between rounded-lg border p-3">
-                          <div>
-                            <div className="font-medium">{b.name}</div>
-                            <div className="text-xs text-muted-foreground">{b.location} • {b.size}</div>
+                {/* العمود الأيمن: اللوحات */}
+                <div className="md:col-span-2 space-y-4">
+                  <Card className="border">
+                    <CardHeader>
+                      <CardTitle className="text-base">اللوحات المختارة ({formData.billboard_ids.length})</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="max-h-96 overflow-auto space-y-2">
+                        {selectedBillboardsDetails.map((b) => (
+                          <div key={b.id} className="flex items-center justify-between rounded-lg border p-3">
+                            <div>
+                              <div className="font-medium">{b.name}</div>
+                              <div className="text-xs text-muted-foreground">{b.location} • {b.size}</div>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => setFormData({ ...formData, billboard_ids: formData.billboard_ids.filter((id) => id !== b.id) })}
+                            >
+                              إزالة
+                            </Button>
                           </div>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            disabled={formData.billboard_ids.includes(b.id || '')}
-                            onClick={() => setFormData({
-                              ...formData,
-                              billboard_ids: formData.billboard_ids.includes(b.id || '')
-                                ? formData.billboard_ids
-                                : [...formData.billboard_ids, b.id || '']
-                            })}
-                          >
-                            إضافة
-                          </Button>
-                        </div>
-                      ))}
-                      {filteredAvailable.length === 0 && (
-                        <p className="text-sm text-muted-foreground">لا توجد نتائج</p>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+                        ))}
+                        {formData.billboard_ids.length === 0 && (
+                          <p className="text-sm text-muted-foreground">لم يت�� اختيار أي لوحة</p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
 
-                <Card className="border">
-                  <CardHeader>
-                    <CardTitle className="text-base">اللوحات المختارة ({formData.billboard_ids.length})</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="max-h-96 overflow-auto space-y-2">
-                      {selectedBillboardsDetails.map((b) => (
-                        <div key={b.id} className="flex items-center justify-between rounded-lg border p-3">
-                          <div>
-                            <div className="font-medium">{b.name}</div>
-                            <div className="text-xs text-muted-foreground">{b.location} • {b.size}</div>
+                  <Card className="border">
+                    <CardHeader>
+                      <CardTitle className="text-base">كل اللوحات المتاحة ({filteredAvailable.length})</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="mb-3">
+                        <Input placeholder="بحث..." value={bbSearch} onChange={(e) => setBbSearch(e.target.value)} />
+                      </div>
+                      <div className="max-h-96 overflow-auto space-y-2">
+                        {filteredAvailable.map((b) => (
+                          <div key={b.id} className="flex items-center justify-between rounded-lg border p-3">
+                            <div>
+                              <div className="font-medium">{b.name}</div>
+                              <div className="text-xs text-muted-foreground">{b.location} • {b.size}</div>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={formData.billboard_ids.includes(b.id || '')}
+                              onClick={() => setFormData({
+                                ...formData,
+                                billboard_ids: formData.billboard_ids.includes(b.id || '')
+                                  ? formData.billboard_ids
+                                  : [...formData.billboard_ids, b.id || '']
+                              })}
+                            >
+                              إضافة
+                            </Button>
                           </div>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => setFormData({ ...formData, billboard_ids: formData.billboard_ids.filter((id) => id !== b.id) })}
-                          >
-                            إزالة
-                          </Button>
-                        </div>
-                      ))}
-                      {formData.billboard_ids.length === 0 && (
-                        <p className="text-sm text-muted-foreground">لم يتم اختيار أي لوحة</p>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+                        ))}
+                        {filteredAvailable.length === 0 && (
+                          <p className="text-sm text-muted-foreground">لا توجد نتائج</p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
               </div>
             </div>
             <div className="flex justify-end gap-2 mt-6">
@@ -386,7 +472,7 @@ export default function Contracts() {
         </Dialog>
       </div>
 
-      {/* إحصائيات سريعة */}
+      {/* إحصائيات س��يعة */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="bg-gradient-card border-0 shadow-card">
           <CardContent className="p-6">
@@ -509,7 +595,7 @@ export default function Contracts() {
               <TableHeader>
                 <TableRow>
                   <TableHead>اسم الزبون</TableHead>
-                  <TableHead>نوع الإعلان</TableHead>
+                  <TableHead>نوع الإعلا��</TableHead>
                   <TableHead>تاريخ البداية</TableHead>
                   <TableHead>تاريخ النهاية</TableHead>
                   <TableHead>التكلفة</TableHead>
@@ -546,10 +632,18 @@ export default function Contracts() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => {/* Navigate to edit */}}
+                          onClick={() => navigate(`/admin/contracts/edit?contract=${String(contract.id)}`)}
                           className="h-8 w-8 p-0"
                         >
                           <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => openAssignDialog(String(contract.Contract_Number ?? contract.id), contract.customer_id ?? null)}
+                          className="h-8 px-2"
+                        >
+                          تعيين زبون
                         </Button>
                         <Button
                           size="sm"
@@ -558,6 +652,101 @@ export default function Contracts() {
                           className="h-8 w-8 p-0"
                         >
                           <Trash2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={async () => {
+                            try {
+                              setPrinting(contract.id);
+                              const details = await getContractWithBillboards(String(contract.id));
+
+                              // template PDF URL (from uploaded file)
+                              const templateUrl = 'https://cdn.builder.io/o/assets%2Fb496a75bf3a847fbbb30839d00fe0721%2F66e10faf2c4d44f787d0db0b9079715c?alt=media&token=205fc1ff-ab26-46fd-bdd1-9ab5ee566add&apiKey=b496a75bf3a847fbbb30839d00fe0721';
+                              const existingPdfBytes = await fetch(templateUrl).then(r => r.arrayBuffer());
+
+                              const pdfDoc = await PDFDocument.load(existingPdfBytes);
+                              const pages = pdfDoc.getPages();
+                              // Embed a Unicode-capable Arabic font (Noto Sans Arabic)
+                              const fontUrl = 'https://fonts.gstatic.com/s/noto/v14/NotoSansArabic-Regular.ttf';
+                              let helv: any;
+                              try {
+                                const fontBytes = await fetch(fontUrl).then(r => r.arrayBuffer());
+                                helv = await pdfDoc.embedFont(fontBytes);
+                              } catch (err) {
+                                // fallback to builtin font if fetch fails (will not support Arabic properly)
+                                try { helv = await pdfDoc.embedFont(StandardFonts.Helvetica); } catch { helv = undefined; }
+                              }
+
+                              // Page 0: header fields
+                              const p0 = pages[0];
+                              const { width, height } = p0.getSize();
+
+                              const contractNumber = details?.Contract_Number || contract.Contract_Number || String(contract.id);
+                              const partyTwo = details?.['Customer Name'] || contract.customer_name || '';
+                              const partyOne = 'شركة الفارس الذهبي للدعاية والإعلان';
+                              const dateStr = (details?.['Contract Date'] || contract.contract_date || contract.start_date) ? new Date(details?.['Contract Date'] || contract.contract_date || contract.start_date).toLocaleDateString('ar-LY') : '';
+                              const total = (details?.total_rent || details?.['Total Rent'] || contract.rent_cost || 0).toLocaleString();
+
+                              // draw some header text (positions may need tuning)
+                              const drawOpts = (font: any, size: number) => ({ font: font, size, color: rgb(0,0,0) });
+                              if (helv) {
+                                p0.drawText(`إيجار لمواقع إعلانية رقم: ${contractNumber}`, { x: 40, y: height - 120, ...drawOpts(helv, 12) });
+                                p0.drawText(`التاريخ: ${dateStr}`, { x: 40, y: height - 140, ...drawOpts(helv, 11) });
+                                p0.drawText(`الطرف الأول: ${partyOne}`, { x: 40, y: height - 170, ...drawOpts(helv, 11) });
+                                p0.drawText(`الطرف الثاني: ${partyTwo}`, { x: 40, y: height - 190, ...drawOpts(helv, 11) });
+                                p0.drawText(`قي��ة العقد: ${total} د.ل`, { x: 40, y: height - 210, ...drawOpts(helv, 11) });
+                              } else {
+                                // fallback: draw ascii-only placeholders
+                                p0.drawText(`Contract: ${contractNumber}`, { x: 40, y: height - 120, size: 12, color: rgb(0,0,0) });
+                                p0.drawText(`Date: ${dateStr}`, { x: 40, y: height - 140, size: 11, color: rgb(0,0,0) });
+                                p0.drawText(`Party 1: ${partyOne}`, { x: 40, y: height - 170, size: 11, color: rgb(0,0,0) });
+                                p0.drawText(`Party 2: ${partyTwo}`, { x: 40, y: height - 190, size: 11, color: rgb(0,0,0) });
+                                p0.drawText(`Total: ${total} LYD`, { x: 40, y: height - 210, size: 11, color: rgb(0,0,0) });
+                              }
+
+                              // Page 1: table of billboards
+                              const p1 = pages[1] || pages[0];
+                              const { width: w1, height: h1 } = p1.getSize();
+                              let startY = h1 - 160;
+                              const rowHeight = 18;
+
+                              const billboards = details?.billboards || details?.items || details?.billboard_ids || [];
+
+                              if (Array.isArray(billboards) && billboards.length > 0) {
+                                // header
+                                p1.drawText('اللوحة - الموقع - القياس - الوجوه - تاريخ الانتهاء', { x: 40, y: startY, size: 11, font: helv, color: rgb(0,0,0) });
+                                startY -= rowHeight;
+                                for (const b of billboards) {
+                                  if (startY < 60) break; // avoid overflow
+                                  const id = b.id || b.Contract_Number || b.contract_number || b['Contract Number'] || String(b);
+                                  const loc = (b.location || b['location'] || b['Location'] || b['Customer Name'] || '') as string;
+                                  const size = (b.size || b['size'] || b['Size'] || '') as string;
+                                  const faces = (b.faces || b['faces'] || b['Faces'] || '') as string;
+                                  const endDate = b.end_date || b['End Date'] || '';
+                                  const endStr = endDate ? new Date(endDate).toLocaleDateString('ar-LY') : '';
+                                  const line = `${id} - ${loc} - ${size} - ${faces} - ${endStr}`;
+                                  p1.drawText(line, { x: 40, y: startY, size: 10, font: helv, color: rgb(0,0,0) });
+                                  startY -= rowHeight;
+                                }
+                              }
+
+                              const pdfBytes = await pdfDoc.save();
+                              const blob = new Blob([pdfBytes], { type: 'application/pdf' });
+                              const url = URL.createObjectURL(blob);
+                              window.open(url, '_blank');
+
+                            } catch (e) {
+                              console.error('print contract error', e);
+                              // use toast if available
+                              try { toast.error('فشل إنشاء ملف العقد'); } catch {}
+                            } finally {
+                              setPrinting(null);
+                            }
+                          }}
+                          className="h-8 px-2"
+                        >
+                          طباعة
                         </Button>
                       </div>
                     </TableCell>
@@ -621,8 +810,8 @@ export default function Contracts() {
                   <CardContent>
                     <div className="space-y-2">
                       <p><strong>تاريخ البداية:</strong> {selectedContract.start_date ? new Date(selectedContract.start_date).toLocaleDateString('ar') : '—'}</p>
-                      <p><strong>تاريخ النهاية:</strong> {selectedContract.end_date ? new Date(selectedContract.end_date).toLocaleDateString('ar') : '—'}</p>
-                      <p><strong>التكلفة الإجمالية:</strong> {(selectedContract.rent_cost || 0).toLocaleString()} د.ل</p>
+                      <p><strong>��اريخ النهاية:</strong> {selectedContract.end_date ? new Date(selectedContract.end_date).toLocaleDateString('ar') : '—'}</p>
+                      <p><strong>ا��تكلفة الإجمالية:</strong> {(selectedContract.rent_cost || 0).toLocaleString()} د.ل</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -649,6 +838,30 @@ export default function Contracts() {
               )}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Assign customer dialog */}
+      <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>تعيين زبون للعقد {assignContractNumber}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 p-2">
+            <Select value={assignCustomerId || '__none'} onValueChange={(v) => setAssignCustomerId(v === '__none' ? null : v)}>
+              <SelectTrigger><SelectValue placeholder="اختر زبون" /></SelectTrigger>
+              <SelectContent className="max-h-60">
+                <SelectItem value="__none">اختيار</SelectItem>
+                {customersList.map(c => (
+                  <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => { setAssignOpen(false); setAssignCustomerId(null); setAssignContractNumber(null); }}>إلغاء</Button>
+              <Button onClick={saveAssign}>حفظ</Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

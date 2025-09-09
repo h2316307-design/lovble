@@ -26,7 +26,7 @@ import {
   Eye,
   Calendar
 } from 'lucide-react';
-import BookingRequestsTable from '@/components/BookingRequestsTable';
+import { BookingRequestsTable } from '@/components/BookingRequestsTable';
 import { toast } from '@/hooks/use-toast';
 
 interface DashboardStats {

@@ -14,6 +14,7 @@ import { supabase } from '@/integrations/supabase/client';
 import MultiSelect from '@/components/ui/multi-select';
 import { CUSTOMERS } from '@/data/pricing';
 import { loadBillboards } from '@/services/billboardService';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Permissions {
   can_view_unavailable?: boolean;
@@ -45,6 +46,7 @@ interface ProfileRow {
 
 export default function Users() {
   const [rows, setRows] = useState<ProfileRow[]>([]);
+  const { profile, isAdmin } = useAuth();
   const [count, setCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -55,6 +57,10 @@ export default function Users() {
   const [hasPermissions, setHasPermissions] = useState<boolean>(true);
   const [permOpenId, setPermOpenId] = useState<string | null>(null);
   const [allClients, setAllClients] = useState<string[]>([]);
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [passwordTargetId, setPasswordTargetId] = useState<string | null>(null);
+  const [passwordNew, setPasswordNew] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
 
   const fetchPage = async (pageIndex: number) => {
     setLoading(true);
@@ -232,7 +238,6 @@ export default function Users() {
                     <TableHead>الزبائن المسموح بهم</TableHead>
                     <TableHead>فئة الأسعار</TableHead>
                     <TableHead>تاريخ الإنشاء</TableHead>
-                    <TableHead>المعرف</TableHead>
                     <TableHead>إجراءات</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -251,7 +256,7 @@ export default function Users() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="admin">مدير</SelectItem>
-                            <SelectItem value="client">عميل</SelectItem>
+                            <SelectItem value="client">زبون</SelectItem>
                           </SelectContent>
                         </Select>
                       </TableCell>
@@ -282,9 +287,13 @@ export default function Users() {
                       </TableCell>
 
                       <TableCell>{r.created_at ? new Date(r.created_at).toLocaleString() : '—'}</TableCell>
-                      <TableCell className="font-mono text-xs">{r.id}</TableCell>
                       <TableCell>
-                        <Button size="sm" onClick={() => handleSave(r)} disabled={savingId === r.id}>حفظ</Button>
+                        <div className="flex gap-2">
+                          <Button size="sm" onClick={() => handleSave(r)} disabled={savingId === r.id}>حفظ</Button>
+                          {isAdmin && (
+                            <Button size="sm" variant="outline" onClick={() => { setPasswordTargetId(r.id); setPasswordNew(''); setPasswordConfirm(''); setPasswordModalOpen(true); }}>تغيير كلمة المرور</Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -327,6 +336,54 @@ export default function Users() {
           )}
         </CardContent>
       </Card>
+
+      {/* Password change modal for admins */}
+      <Dialog open={passwordModalOpen} onOpenChange={setPasswordModalOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>تغيير كلمة المرور</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 mt-4">
+            <Input type="password" placeholder="كلمة المرور الجديدة" value={passwordNew} onChange={(e)=>setPasswordNew(e.target.value)} />
+            <Input type="password" placeholder="تأكيد كلمة المرور" value={passwordConfirm} onChange={(e)=>setPasswordConfirm(e.target.value)} />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setPasswordModalOpen(false)}>إلغاء</Button>
+              <Button onClick={async () => {
+                if (!passwordTargetId) return;
+                if (!passwordNew) { toast.error('ادخل كلمة المرور'); return; }
+                if (passwordNew !== passwordConfirm) { toast.error('كلمات المرور غير متطابقة'); return; }
+                try {
+                  const { data: sess } = await supabase.auth.getSession();
+                  const token = (sess as any)?.session?.access_token || '';
+                  const resp = await fetch('/.netlify/functions/admin-set-profile-password', {
+                    method: 'POST',
+                    headers: {
+                      'content-type': 'application/json',
+                      ...(token ? { authorization: `Bearer ${token}` } : {})
+                    },
+                    body: JSON.stringify({ userId: passwordTargetId, password: passwordNew })
+                  });
+                  const json = await resp.json().catch(()=>null);
+                  if (!resp.ok) {
+                    console.error('set password error', json || resp.statusText);
+                    toast.error(json?.error || 'فشل تحديث كلمة المرور');
+                  } else {
+                    toast.success('تم تحديث كلمة المرور');
+                    setPasswordModalOpen(false);
+                    setPasswordTargetId(null);
+                    setPasswordNew('');
+                    setPasswordConfirm('');
+                  }
+                } catch (e) {
+                  console.error('set password error', e);
+                  toast.error('فشل تحديث كلمة المرور');
+                }
+              }}>حفظ</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }

@@ -25,18 +25,40 @@ interface ContractCreate {
 export async function createContract(contractData: ContractData) {
   // فصل معرفات اللوحات عن بيانات العقد
   const { billboard_ids, ...contractPayload } = contractData;
-  
+
+  // Determine customer_id: prefer explicit, else find by name, else create new customer
+  let customer_id: string | null = (contractData as any).customer_id || null;
+
+  if (!customer_id && contractPayload.customer_name) {
+    try {
+      const nameTrim = String(contractPayload.customer_name).trim();
+      const { data: existing, error: exErr } = await supabase.from('customers').select('id').ilike('name', nameTrim).limit(1).maybeSingle();
+      if (!exErr && existing && (existing as any).id) {
+        customer_id = (existing as any).id;
+      } else {
+        // create new customer
+        const { data: newC, error: newErr } = await supabase.from('customers').insert({ name: nameTrim }).select().single();
+        if (!newErr && newC && (newC as any).id) customer_id = (newC as any).id;
+      }
+    } catch (e) {
+      // ignore and proceed without customer_id
+    }
+  }
+
   // إنشاء العقد
+  const insertPayload: any = {
+    'Customer Name': contractPayload.customer_name,
+    'Ad Type': contractPayload.ad_type || '',
+    'Contract Date': contractPayload.start_date,
+    'End Date': contractPayload.end_date,
+    'Total Rent': contractPayload.rent_cost,
+    'Discount': contractPayload.discount ?? null
+  };
+  if (customer_id) insertPayload.customer_id = customer_id;
+
   const { data: contract, error: contractError } = await supabase
     .from('Contract')
-    .insert({
-      'Customer Name': contractPayload.customer_name,
-      'Ad Type': contractPayload.ad_type || '',
-      'Contract Date': contractPayload.start_date,
-      'End Date': contractPayload.end_date,
-      'Total Rent': contractPayload.rent_cost,
-      'Discount': contractPayload.discount ?? null
-    })
+    .insert(insertPayload)
     .select()
     .single();
 
@@ -79,6 +101,7 @@ export async function getContracts() {
       id,
       Contract_Number: c.Contract_Number ?? c['Contract Number'] ?? id,
       'Contract Number': c['Contract Number'] ?? c.Contract_Number ?? id,
+      customer_id: c.customer_id ?? c.customer_id ?? null,
       customer_name: c.customer_name ?? c['Customer Name'] ?? c.Customer_Name ?? '',
       ad_type: c.ad_type ?? c['Ad Type'] ?? c.Ad_Type ?? '',
       start_date: c.start_date ?? c['Contract Date'] ?? c.contract_date ?? '',
@@ -119,6 +142,7 @@ export async function getContractWithBillboards(contractId: string): Promise<any
       id: c.Contract_Number ?? c['Contract Number'] ?? c.id ?? c.ID,
       Contract_Number: c.Contract_Number ?? c['Contract Number'],
       'Contract Number': c['Contract Number'] ?? c.Contract_Number,
+      customer_id: c.customer_id ?? c.customer_id ?? null,
       customer_name: c.customer_name ?? c['Customer Name'] ?? c.Customer_Name ?? '',
       ad_type: c.ad_type ?? c['Ad Type'] ?? c.Ad_Type ?? '',
       start_date: c.start_date ?? c['Contract Date'] ?? c.contract_date ?? '',

@@ -29,15 +29,57 @@ const Toaster = ({ ...props }: ToasterProps) => {
 function formatArg(arg: any) {
   if (arg === undefined || arg === null) return arg;
   if (typeof arg === 'string') return arg;
+
+  // Handle native Error instances explicitly
+  if (arg instanceof Error) {
+    return arg.message || String(arg);
+  }
+
   if (arg && typeof arg === 'object') {
     if (typeof arg.message === 'string') return arg.message;
+
+    // Try JSON.stringify with circular reference handling
     try {
-      return JSON.stringify(arg);
-    } catch {
-      return String(arg);
+      const seen = new WeakSet();
+      const json = JSON.stringify(arg, function (_key, value) {
+        if (value && typeof value === 'object') {
+          if (seen.has(value)) return '[Circular]';
+          seen.add(value);
+        }
+        return value;
+      }, 2);
+      if (json && json !== '{}') return json;
+    } catch (err) {
+      // fallthrough to other attempts
     }
+
+    // Try toString if it provides something useful
+    try {
+      if (typeof arg.toString === 'function') {
+        const s = arg.toString();
+        if (s && s !== '[object Object]') return s;
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    // As a last resort, produce a shallow key: value preview
+    try {
+      const keys = Object.keys(arg as Record<string, any>);
+      if (keys.length > 0) {
+        const pairs = keys.slice(0, 10).map((k) => {
+          try { return `${k}: ${String((arg as any)[k])}`; } catch { return `${k}: [unserializable]`; }
+        });
+        return pairs.join(', ');
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    return '[object Object]';
   }
-  return String(arg);
+
+  try { return String(arg); } catch { return '[object]'; }
 }
 
 function makeSafe(fn: any) {

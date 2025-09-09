@@ -24,6 +24,11 @@ export default function Billboards() {
   const [editing, setEditing] = useState<Billboard | null>(null);
   const [editForm, setEditForm] = useState<any>({});
   const [saving, setSaving] = useState(false);
+
+  // Add billboard dialog
+  const [addOpen, setAddOpen] = useState(false);
+  const [addForm, setAddForm] = useState<any>({});
+  const [adding, setAdding] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 40;
 
@@ -41,17 +46,41 @@ export default function Billboards() {
       Contract_Number: (bb as any).contractNumber || (bb as any).Contract_Number || '',
       Customer_Name: (bb as any).clientName || (bb as any).Customer_Name || '',
       Ad_Type: (bb as any).adType || (bb as any).Ad_Type || '',
-      Image_URL: (bb as any).Image_URL || bb.image || ''
+      Image_URL: (bb as any).Image_URL || bb.image || '',
+      // partnership fields
+      is_partnership: !!(bb as any).is_partnership,
+      partner_companies: (bb as any).partner_companies || (bb as any).partners || [],
+      capital: (bb as any).capital || 0,
+      capital_remaining: (bb as any).capital_remaining || (bb as any).capitalRemaining || (bb as any).capital || 0
     });
     setEditOpen(true);
   };
+
+  // initialize add form defaults
+  useEffect(() => {
+    setAddForm({
+      Billboard_Name: '',
+      City: '',
+      Municipality: '',
+      District: '',
+      Nearest_Landmark: '',
+      Size: '',
+      Status: 'available',
+      Level: 'A',
+      Image_URL: '',
+      is_partnership: false,
+      partner_companies: [],
+      capital: 0,
+      capital_remaining: 0
+    });
+  }, []);
 
   const saveEdit = async () => {
     if (!editing) return;
     setSaving(true);
     const id = editing.id;
-    const { Billboard_Name, City, Municipality, District, Nearest_Landmark, Size, Level, Image_URL } = editForm as any;
-    const payload: any = { Billboard_Name, City, Municipality, District, Nearest_Landmark, Size, Level, Image_URL };
+    const { Billboard_Name, City, Municipality, District, Nearest_Landmark, Size, Level, Image_URL, is_partnership, partner_companies, capital, capital_remaining } = editForm as any;
+    const payload: any = { Billboard_Name, City, Municipality, District, Nearest_Landmark, Size, Level, Image_URL, is_partnership: !!is_partnership, partner_companies: Array.isArray(partner_companies) ? partner_companies : String(partner_companies).split(',').map(s=>s.trim()).filter(Boolean), capital: Number(capital)||0, capital_remaining: Number(capital_remaining)||Number(capital)||0 };
 
     const { error } = await supabase.from('billboards').update(payload).eq('ID', Number(id));
 
@@ -67,6 +96,25 @@ export default function Billboards() {
       setEditing(null);
     }
     setSaving(false);
+  };
+
+  const addBillboard = async () => {
+    setAdding(true);
+    const { Billboard_Name, City, Municipality, District, Nearest_Landmark, Size, Level, Image_URL, is_partnership, partner_companies, capital, capital_remaining } = addForm as any;
+    const payload: any = { Billboard_Name, City, Municipality, District, Nearest_Landmark, Size, Level, Image_URL, is_partnership: !!is_partnership, partner_companies: Array.isArray(partner_companies) ? partner_companies : String(partner_companies).split(',').map(s=>s.trim()).filter(Boolean), capital: Number(capital)||0, capital_remaining: Number(capital_remaining)||Number(capital)||0 };
+    try {
+      const { data, error } = await supabase.from('billboards').insert(payload).select().single();
+      if (error) throw error;
+      toast.success('تم إضافة اللوحة');
+      const fresh = await loadBillboards();
+      setBillboards(fresh);
+      setAddOpen(false);
+    } catch (e:any) {
+      console.error('add billboard error', e);
+      toast.error(e?.message || 'فشل الإضافة');
+    } finally {
+      setAdding(false);
+    }
   };
 
   useEffect(() => {
@@ -132,12 +180,15 @@ export default function Billboards() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">إدارة اللوحات الإعلانية</h1>
-          <p className="text-muted-foreground">عرض وإدارة جميع اللوحات الإعلانية مع إمكانية التعديل والصيا��ة</p>
+          <p className="text-muted-foreground">عرض وإدارة جميع اللوحات الإعلانية مع إمكانية التعديل والصيانة</p>
         </div>
-        <Button className="bg-gradient-primary text-white shadow-elegant hover:shadow-glow transition-smooth">
-          <Plus className="h-4 w-4 ml-2" />
-          إضافة معلن
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => setAddOpen(true)} className="bg-gradient-primary text-white shadow-elegant hover:shadow-glow transition-smooth">
+            <Plus className="h-4 w-4 ml-2" />
+            إضافة لوحة
+          </Button>
+          <Button variant="outline" onClick={() => navigate('/admin/shared-billboards')}>اللوحات المشتركة</Button>
+        </div>
       </div>
 
       {/* أدوات التصفية والبحث */}
@@ -357,10 +408,99 @@ export default function Billboards() {
               <Label>رابط الصورة</Label>
               <Input value={editForm.Image_URL || ''} onChange={(e) => setEditForm((p: any) => ({ ...p, Image_URL: e.target.value }))} />
             </div>
+
+            <div className="sm:col-span-2">
+              <div className="flex items-center gap-3">
+                <Label>لوحة شراكة</Label>
+                <input type="checkbox" checked={!!editForm.is_partnership} onChange={(e)=> setEditForm((p:any)=>({...p, is_partnership: e.target.checked}))} />
+              </div>
+            </div>
+
+            {editForm.is_partnership && (
+              <>
+                <div className="sm:col-span-2">
+                  <Label>الشركات المشاركة (فصل بالفواصل)</Label>
+                  <Input value={(Array.isArray(editForm.partner_companies)? editForm.partner_companies.join(', ') : editForm.partner_companies || '')} onChange={(e)=> setEditForm((p:any)=>({...p, partner_companies: e.target.value}))} />
+                </div>
+                <div>
+                  <Label>رأس مال اللوحة</Label>
+                  <Input type="number" value={editForm.capital || 0} onChange={(e)=> setEditForm((p:any)=>({...p, capital: Number(e.target.value)}))} />
+                </div>
+                <div>
+                  <Label>المتبقي من رأس المال</Label>
+                  <Input type="number" value={editForm.capital_remaining || editForm.capital || 0} onChange={(e)=> setEditForm((p:any)=>({...p, capital_remaining: Number(e.target.value)}))} />
+                </div>
+              </>
+            )}
+
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <Button variant="outline" onClick={() => setEditOpen(false)}>إلغاء</Button>
             <Button onClick={saveEdit} disabled={saving}>{saving ? 'جارٍ الحفظ...' : 'حفظ'}</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Billboard Dialog */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>إضافة لوحة جديدة</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <Label>الاسم</Label>
+              <Input value={addForm.Billboard_Name || ''} onChange={(e) => setAddForm((p: any) => ({ ...p, Billboard_Name: e.target.value }))} />
+            </div>
+            <div>
+              <Label>المدينة</Label>
+              <Input value={addForm.City || ''} onChange={(e) => setAddForm((p: any) => ({ ...p, City: e.target.value }))} />
+            </div>
+            <div className="sm:col-span-2">
+              <Label>أقرب معلم</Label>
+              <Input value={addForm.Nearest_Landmark || ''} onChange={(e) => setAddForm((p: any) => ({ ...p, Nearest_Landmark: e.target.value }))} />
+            </div>
+            <div>
+              <Label>المقاس</Label>
+              <Input value={addForm.Size || ''} onChange={(e) => setAddForm((p: any) => ({ ...p, Size: e.target.value }))} />
+            </div>
+            <div>
+              <Label>المستوى</Label>
+              <Input value={addForm.Level || ''} onChange={(e) => setAddForm((p: any) => ({ ...p, Level: e.target.value }))} />
+            </div>
+            <div className="sm:col-span-2">
+              <Label>رابط الصورة</Label>
+              <Input value={addForm.Image_URL || ''} onChange={(e) => setAddForm((p: any) => ({ ...p, Image_URL: e.target.value }))} />
+            </div>
+
+            <div className="sm:col-span-2">
+              <div className="flex items-center gap-3">
+                <Label>لوحة شراكة</Label>
+                <input type="checkbox" checked={!!addForm.is_partnership} onChange={(e)=> setAddForm((p:any)=>({...p, is_partnership: e.target.checked}))} />
+              </div>
+            </div>
+
+            {addForm.is_partnership && (
+              <>
+                <div className="sm:col-span-2">
+                  <Label>الشركات المشاركة (فصل بالفواصل)</Label>
+                  <Input value={(Array.isArray(addForm.partner_companies)? addForm.partner_companies.join(', ') : addForm.partner_companies || '')} onChange={(e)=> setAddForm((p:any)=>({...p, partner_companies: e.target.value}))} />
+                </div>
+                <div>
+                  <Label>رأس مال اللوحة</Label>
+                  <Input type="number" value={addForm.capital || 0} onChange={(e)=> setAddForm((p:any)=>({...p, capital: Number(e.target.value)}))} />
+                </div>
+                <div>
+                  <Label>المتبقي من رأس المال</Label>
+                  <Input type="number" value={addForm.capital_remaining || addForm.capital || 0} onChange={(e)=> setAddForm((p:any)=>({...p, capital_remaining: Number(e.target.value)}))} />
+                </div>
+              </>
+            )}
+
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setAddOpen(false)}>إلغاء</Button>
+            <Button onClick={addBillboard} disabled={adding}>{adding ? 'جاري الإضافة...' : 'إضافة'}</Button>
           </div>
         </DialogContent>
       </Dialog>

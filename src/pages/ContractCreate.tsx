@@ -22,10 +22,11 @@ export default function ContractCreate() {
   // selection
   const [selected, setSelected] = useState<string[]>([]);
 
-  // customers combobox
-  const [customers, setCustomers] = useState<string[]>([]);
+  // customers combobox (id+name)
+  const [customers, setCustomers] = useState<{id: string; name: string}[]>([]);
   const [customerOpen, setCustomerOpen] = useState(false);
   const [customerQuery, setCustomerQuery] = useState('');
+  const [customerId, setCustomerId] = useState<string | null>(null);
 
   // filters
   const [q, setQ] = useState('');
@@ -62,11 +63,9 @@ export default function ContractCreate() {
   useEffect(() => {
     (async () => {
       try {
-        const { data, error } = await supabase.from('Contract').select('"Customer Name"');
+        const { data, error } = await supabase.from('customers').select('id,name').order('name', { ascending: true });
         if (!error && Array.isArray(data)) {
-          const list = Array.from(new Set(((data as any[]) ?? []).map((r: any) => r['Customer Name']).filter(Boolean)));
-          list.sort((a, b) => String(a).localeCompare(String(b), 'ar'));
-          setCustomers(list as string[]);
+          setCustomers((data as any) || []);
         }
       } catch (e) {
         console.warn('load customers failed');
@@ -143,7 +142,7 @@ export default function ContractCreate() {
         toast.error('يرجى تعبئة بيانات الزبون والتواريخ واختيار لوحات');
         return;
       }
-      const payload = {
+      const payload: any = {
         customer_name: customerName,
         start_date: startDate,
         end_date: endDate,
@@ -151,7 +150,8 @@ export default function ContractCreate() {
         discount: discountAmount,
         ad_type: adType,
         billboard_ids: selected,
-      } as any;
+      };
+      if (customerId) payload.customer_id = customerId;
       await createContract(payload);
       toast.success('تم إنشاء العقد بنجاح');
       navigate('/admin/contracts');
@@ -334,11 +334,19 @@ export default function ContractCreate() {
                       <CommandInput placeholder="ابحث أو اكتب اسم جديد" value={customerQuery} onValueChange={setCustomerQuery} />
                       <CommandList>
                         <CommandEmpty>
-                          <Button variant="ghost" className="w-full justify-start" onClick={() => {
+                          <Button variant="ghost" className="w-full justify-start" onClick={async () => {
                             if (customerQuery.trim()) {
                               const name = customerQuery.trim();
-                              setCustomerName(name);
-                              setCustomers((prev) => prev.includes(name) ? prev : [name, ...prev]);
+                              try {
+                                const { data: newC, error } = await supabase.from('customers').insert({ name }).select().single();
+                                if (!error && newC && (newC as any).id) {
+                                  setCustomerId((newC as any).id);
+                                  setCustomerName(name);
+                                  setCustomers(prev => [{ id: (newC as any).id, name }, ...prev]);
+                                }
+                              } catch (e) {
+                                console.warn(e);
+                              }
                               setCustomerOpen(false);
                               setCustomerQuery('');
                             }
@@ -348,21 +356,28 @@ export default function ContractCreate() {
                         </CommandEmpty>
                         <CommandGroup>
                           {customers.map((c) => (
-                            <CommandItem key={c} value={c} onSelect={() => {
-                              setCustomerName(c);
+                            <CommandItem key={c.id} value={c.name} onSelect={() => {
+                              setCustomerName(c.name);
+                              setCustomerId(c.id);
                               setCustomerOpen(false);
                               setCustomerQuery('');
                             }}>
-                              {c}
+                              {c.name}
                             </CommandItem>
                           ))}
-                          {customerQuery && !customers.includes(customerQuery.trim()) && (
+                          {customerQuery && !customers.some(x => x.name === customerQuery.trim()) && (
                             <CommandItem
                               value={`__add_${customerQuery}`}
-                              onSelect={() => {
+                              onSelect={async () => {
                                 const name = customerQuery.trim();
-                                setCustomerName(name);
-                                setCustomers((prev) => prev.includes(name) ? prev : [name, ...prev]);
+                                try {
+                                  const { data: newC, error } = await supabase.from('customers').insert({ name }).select().single();
+                                  if (!error && newC && (newC as any).id) {
+                                    setCustomerId((newC as any).id);
+                                    setCustomerName(name);
+                                    setCustomers(prev => [{ id: (newC as any).id, name }, ...prev]);
+                                  }
+                                } catch (e) { console.warn(e); }
                                 setCustomerOpen(false);
                                 setCustomerQuery('');
                               }}
