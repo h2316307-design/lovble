@@ -18,6 +18,7 @@ export default function ContractCreate() {
   const navigate = useNavigate();
   const [billboards, setBillboards] = useState<Billboard[]>([]);
   const [loading, setLoading] = useState(true);
+  const [nextContractNumber, setNextContractNumber] = useState<string>('');
 
   // selection
   const [selected, setSelected] = useState<string[]>([]);
@@ -28,11 +29,11 @@ export default function ContractCreate() {
   const [customerQuery, setCustomerQuery] = useState('');
   const [customerId, setCustomerId] = useState<string | null>(null);
 
-  // filters
+  // filters - matching ContractEdit exactly
   const [q, setQ] = useState('');
   const [city, setCity] = useState<string>('all');
   const [size, setSize] = useState<string>('all');
-  const [status, setStatus] = useState<string>('available');
+  const [status, setStatus] = useState<string>('all'); // Changed from 'available' to 'all' to match ContractEdit
 
   // form fields (sidebar)
   const [customerName, setCustomerName] = useState('');
@@ -46,14 +47,37 @@ export default function ContractCreate() {
   const [discountType, setDiscountType] = useState<'percent' | 'amount'>('percent');
   const [discountValue, setDiscountValue] = useState<number>(0);
 
+  // Get next contract number
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data, error } = await (supabase as any)
+          .from('Contract')
+          .select('Contract_Number')
+          .order('Contract_Number', { ascending: false })
+          .limit(1);
+        
+        if (!error && data && data.length > 0) {
+          const lastNumber = parseInt(data[0].Contract_Number) || 0;
+          setNextContractNumber(String(lastNumber + 1));
+        } else {
+          setNextContractNumber('1');
+        }
+      } catch (e) {
+        console.warn('Failed to get next contract number, using 1');
+        setNextContractNumber('1');
+      }
+    })();
+  }, []);
+
   useEffect(() => {
     (async () => {
       try {
         const data = await loadBillboards();
         setBillboards(data);
-      } catch (e) {
+      } catch (e: any) {
         console.error(e);
-        toast.error('فشل تحميل اللوحات');
+        toast.error(e?.message || 'فشل تحميل اللوحات');
       } finally {
         setLoading(false);
       }
@@ -63,7 +87,7 @@ export default function ContractCreate() {
   useEffect(() => {
     (async () => {
       try {
-        const { data, error } = await supabase.from('customers').select('id,name').order('name', { ascending: true });
+        const { data, error } = await (supabase as any).from('customers').select('id,name').order('name', { ascending: true });
         if (!error && Array.isArray(data)) {
           setCustomers((data as any) || []);
         }
@@ -104,16 +128,22 @@ export default function ContractCreate() {
 
   const baseTotal = useMemo(() => (rentCost && rentCost > 0 ? rentCost : estimatedTotal), [rentCost, estimatedTotal]);
 
+  // auto update rent cost with new estimation unless user manually edited it
   useEffect(() => {
-    if (!userEditedRentCost) setRentCost(estimatedTotal);
+    if (!userEditedRentCost) {
+      setRentCost(estimatedTotal);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [estimatedTotal]);
+
   const discountAmount = useMemo(() => {
     if (!discountValue) return 0;
     return discountType === 'percent' ? (baseTotal * Math.max(0, Math.min(100, discountValue)) / 100) : Math.max(0, discountValue);
   }, [discountType, discountValue, baseTotal]);
+  
   const finalTotal = useMemo(() => Math.max(0, baseTotal - discountAmount), [baseTotal, discountAmount]);
 
+  // Filter logic matching ContractEdit exactly
   const filtered = useMemo(() => {
     return billboards.filter((b) => {
       const text = (b.name || b.Billboard_Name || '').toLowerCase();
@@ -124,10 +154,12 @@ export default function ContractCreate() {
       const matchesQ = !q || text.includes(q.toLowerCase()) || loc.includes(q.toLowerCase());
       const matchesCity = city === 'all' || c === city;
       const matchesSize = size === 'all' || s === size;
-      const matchesStatus = status === 'all' || st === status || (status === 'available' && !b.contractNumber && !b.Contract_Number);
+      // Match ContractEdit logic: allow selecting items already in this contract; otherwise prefer available only when status filter is 'available'
+      const isInContract = selected.includes(String(b.ID));
+      const matchesStatus = status === 'all' || (status === 'available' ? (st === 'available' || (!b.contractNumber && !b.Contract_Number) || isInContract) : true);
       return matchesQ && matchesCity && matchesSize && matchesStatus;
     });
-  }, [billboards, q, city, size, status]);
+  }, [billboards, q, city, size, status, selected]);
 
   const toggleSelect = (b: Billboard) => {
     const id = String(b.ID);
@@ -150,14 +182,15 @@ export default function ContractCreate() {
         discount: discountAmount,
         ad_type: adType,
         billboard_ids: selected,
+        contract_number: nextContractNumber, // Add auto-generated contract number
       };
       if (customerId) payload.customer_id = customerId;
       await createContract(payload);
       toast.success('تم إنشاء العقد بنجاح');
       navigate('/admin/contracts');
-    } catch (e) {
+    } catch (e: any) {
       console.error(e);
-      toast.error('فشل إنشاء العقد');
+      toast.error(e?.message || 'فشل إنشاء العقد');
     }
   };
 
@@ -165,19 +198,18 @@ export default function ContractCreate() {
     <div className="container mx-auto px-4 py-6 space-y-6" dir="rtl">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-foreground">إنشاء عقد جديد</h1>
+          <h1 className="text-3xl font-bold text-foreground">إنشاء عقد جديد {nextContractNumber && `#${nextContractNumber}`}</h1>
           <p className="text-muted-foreground">إنشاء عقد إيجار جديد مع تحديد اللوحات والشروط</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => navigate('/admin/contracts')}>
-            إلغاء
+            عودة
           </Button>
           <Button onClick={submit} className="bg-gradient-primary text-white shadow-elegant hover:shadow-glow transition-smooth">
             إنشاء العقد
           </Button>
         </div>
       </div>
-
       <div className="flex flex-col lg:flex-row gap-6">
         {/* main area */}
         <div className="flex-1 space-y-6">
@@ -186,12 +218,12 @@ export default function ContractCreate() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Calendar className="h-5 w-5 text-primary" />
-                اللوحات المختارة ({selected.length})
+                اللوحات المرتبطة ({selected.length})
               </CardTitle>
             </CardHeader>
             <CardContent>
               {selected.length === 0 ? (
-                <p className="text-muted-foreground">لم يتم اختيار أي لوحة بعد</p>
+                <p className="text-muted-foreground">لا توجد لوحات</p>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {billboards.filter(b => selected.includes(String(b.ID))).map((b) => {
@@ -258,15 +290,15 @@ export default function ContractCreate() {
                 <Select value={status} onValueChange={setStatus}>
                   <SelectTrigger className="w-[160px]"><SelectValue placeholder="الحالة" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="available">المتاحة</SelectItem>
                     <SelectItem value="all">الكل</SelectItem>
+                    <SelectItem value="available">المتاحة</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </CardContent>
           </Card>
 
-          {/* all billboards below */}
+          {/* grid below */}
           <Card className="bg-gradient-card border-0 shadow-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -322,7 +354,7 @@ export default function ContractCreate() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div>
-                <label className="text-sm">اسم الزبون *</label>
+                <label className="text-sm">اسم الزبون</label>
                 <Popover open={customerOpen} onOpenChange={setCustomerOpen}>
                   <PopoverTrigger asChild>
                     <Button variant="outline" role="combobox" className="w-full justify-between">
@@ -338,15 +370,13 @@ export default function ContractCreate() {
                             if (customerQuery.trim()) {
                               const name = customerQuery.trim();
                               try {
-                                const { data: newC, error } = await supabase.from('customers').insert({ name }).select().single();
+                                const { data: newC, error } = await (supabase as any).from('customers').insert({ name }).select().single();
                                 if (!error && newC && (newC as any).id) {
                                   setCustomerId((newC as any).id);
                                   setCustomerName(name);
                                   setCustomers(prev => [{ id: (newC as any).id, name }, ...prev]);
                                 }
-                              } catch (e) {
-                                console.warn(e);
-                              }
+                              } catch (e) { console.warn(e); }
                               setCustomerOpen(false);
                               setCustomerQuery('');
                             }
@@ -371,7 +401,7 @@ export default function ContractCreate() {
                               onSelect={async () => {
                                 const name = customerQuery.trim();
                                 try {
-                                  const { data: newC, error } = await supabase.from('customers').insert({ name }).select().single();
+                                  const { data: newC, error } = await (supabase as any).from('customers').insert({ name }).select().single();
                                   if (!error && newC && (newC as any).id) {
                                     setCustomerId((newC as any).id);
                                     setCustomerName(name);
@@ -393,7 +423,7 @@ export default function ContractCreate() {
               </div>
               <div>
                 <label className="text-sm">نوع الإعلان</label>
-                <Input value={adType} onChange={(e) => setAdType(e.target.value)} placeholder="مثال: لوحات طرق" />
+                <Input value={adType} onChange={(e) => setAdType(e.target.value)} />
               </div>
               <div>
                 <label className="text-sm">فئة السعر</label>
@@ -401,7 +431,7 @@ export default function ContractCreate() {
                   <SelectTrigger><SelectValue placeholder="الفئة" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="عادي">عادي</SelectItem>
-                    <SelectItem value="شرك��ت">شركات</SelectItem>
+                    <SelectItem value="شركات">شركات</SelectItem>
                     <SelectItem value="مسوق">مسوق</SelectItem>
                     <SelectItem value="المدينة">المدينة</SelectItem>
                   </SelectContent>
@@ -419,7 +449,7 @@ export default function ContractCreate() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div>
-                <label className="text-sm">تاريخ البداية *</label>
+                <label className="text-sm">تاريخ البداية</label>
                 <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
               </div>
               <div>
