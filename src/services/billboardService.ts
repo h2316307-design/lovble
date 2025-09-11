@@ -501,11 +501,31 @@ export function getBillboardsByCity(billboards: Billboard[], city: string): Bill
   return billboards.filter(b => b.city === city);
 }
 
+import { normalizeArabic, queryTokens } from '@/lib/utils';
+
 export function searchBillboards(billboards: Billboard[], query: string): Billboard[] {
-  const lowercaseQuery = query.toLowerCase();
-  return billboards.filter(b => 
-    b.name.toLowerCase().includes(lowercaseQuery) ||
-    b.location.toLowerCase().includes(lowercaseQuery) ||
-    b.city.toLowerCase().includes(lowercaseQuery)
-  );
+  const tokens = queryTokens(query);
+  if (tokens.length === 0) return billboards;
+  return billboards.filter((b) => {
+    const parts = [
+      (b as any).Billboard_Name,
+      b.name,
+      (b as any).Nearest_Landmark,
+      b.location,
+      (b as any).Municipality,
+      b.municipality,
+      (b as any).District,
+      b.district,
+      (b as any).City,
+      b.city,
+      b.size,
+      b.level,
+      b.id,
+      b.contractNumber,
+      b.clientName,
+      b.adType,
+    ].filter(Boolean) as Array<string | number>;
+    const haystack = normalizeArabic(parts.join(' '));
+    return tokens.every((t) => haystack.includes(t));
+  });
 }

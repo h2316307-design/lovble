@@ -20,7 +20,7 @@ function formatMonths(m: number) {
   switch (m) {
     case 1: return 'شهر';
     case 2: return 'شهران';
-    case 3: return '3 ��شهر';
+    case 3: return '3 أشهر';
     case 6: return '6 أشهر';
     case 12: return 'سنة';
     default: return `${m} أشهر`;
@@ -71,6 +71,8 @@ function buildInvoiceHtml(props: Props) {
       tfoot td{font-weight:700}
       .meta{color:#666;font-size:12px}
       .actions{margin-top:16px}
+      .save-btn{padding:8px 16px;border:1px solid #ddd;border-radius:8px;background:#28a745;color:#fff;margin-left:8px}
+      .print-btn{padding:8px 16px;border:1px solid #ddd;border-radius:8px;background:#111;color:#fff}
     </style>
   </head><body>
     <div class="container">
@@ -106,21 +108,90 @@ function buildInvoiceHtml(props: Props) {
         </tfoot>
       </table>
       <div class="actions">
-        <button onclick="window.print()" style="padding:8px 16px;border:1px solid #ddd;border-radius:8px;background:#111;color:#fff">طباعة</button>
+        <button onclick="saveInvoice()" class="save-btn">حفظ الفاتورة</button>
+        <button onclick="window.print()" class="print-btn">طباعة</button>
       </div>
     </div>
+    <script>
+      function saveInvoice() {
+        try {
+          const invoiceData = {
+            date: new Date().toISOString(),
+            items: ${JSON.stringify(rows.map(r => ({
+              id: r.b.id,
+              name: r.b.name,
+              location: r.b.location,
+              size: r.b.size,
+              months: r.months,
+              customer: r.customer,
+              price: r.unit,
+              total: r.total
+            })))},
+            total: ${grand},
+            timestamp: Date.now()
+          };
+          
+          // Save to localStorage
+          const savedInvoices = JSON.parse(localStorage.getItem('savedInvoices') || '[]');
+          savedInvoices.push(invoiceData);
+          localStorage.setItem('savedInvoices', JSON.stringify(savedInvoices));
+          
+          alert('تم حفظ الفاتورة بنجاح!');
+        } catch (error) {
+          console.error('خطأ في حفظ الفاتورة:', error);
+          alert('فشل في حفظ الفاتورة');
+        }
+      }
+    </script>
   </body></html>`;
 }
 
 export default function InvoiceDialog(props: Props) {
-  const { open, onOpenChange, items } = props;
-  const grand = items.reduce((s, b) => s + 0, 0);
+  const { open, onOpenChange, items, monthsById, customerById } = props;
+  
+  // Fix the total calculation
+  const grand = items.reduce((s, b) => {
+    const months = monthsById[b.id] || 1;
+    const customer = customerById[b.id] || CUSTOMERS[0];
+    const price = getPriceFor(b.size, (b as any).level, customer, months) ?? 0;
+    return s + price;
+  }, 0);
+  
   const handlePrint = () => {
     const win = window.open('', '_blank');
     if (!win) return;
     win.document.write(buildInvoiceHtml(props));
     win.document.close();
     win.focus();
+  };
+
+  const handleSave = () => {
+    try {
+      const invoiceData = {
+        date: new Date().toISOString(),
+        items: items.map(b => ({
+          id: b.id,
+          name: b.name,
+          location: b.location,
+          size: b.size,
+          months: monthsById[b.id] || 1,
+          customer: customerById[b.id] || CUSTOMERS[0],
+          price: getPriceFor(b.size, (b as any).level, customerById[b.id] || CUSTOMERS[0], monthsById[b.id] || 1) ?? 0
+        })),
+        total: grand,
+        timestamp: Date.now()
+      };
+      
+      // Save to localStorage
+      const savedInvoices = JSON.parse(localStorage.getItem('savedInvoices') || '[]');
+      savedInvoices.push(invoiceData);
+      localStorage.setItem('savedInvoices', JSON.stringify(savedInvoices));
+      
+      alert('تم حفظ الفاتورة بنجاح!');
+    } catch (error) {
+      console.error('خطأ في حفظ الفاتورة:', error);
+      alert('فشل في حفظ الفاتورة');
+    }
   };
 
   return (
@@ -130,8 +201,21 @@ export default function InvoiceDialog(props: Props) {
           <UIDialog.DialogTitle>فاتورة اللوحات المختارة</UIDialog.DialogTitle>
         </UIDialog.DialogHeader>
         <div className="overflow-x-auto">
-          <div className="text-sm text-muted-foreground mb-3">راجع تفاصيل اللوحات ثم اطبع الفاتورة.</div>
-          <Button onClick={handlePrint} className="bg-primary text-primary-foreground">طباعة</Button>
+          <div className="text-sm text-muted-foreground mb-3">
+            راجع تفاصيل اللوحات ثم احفظ أو اطبع الفاتورة.
+          </div>
+          <div className="mb-4 p-4 bg-muted rounded-lg">
+            <div className="text-lg font-semibold">الإجمالي: {format(grand)} د.ل</div>
+            <div className="text-sm text-muted-foreground">عدد اللوحات: {items.length}</div>
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={handleSave} className="bg-success text-success-foreground">
+              حفظ الفاتورة
+            </Button>
+            <Button onClick={handlePrint} className="bg-primary text-primary-foreground">
+              طباعة
+            </Button>
+          </div>
         </div>
       </UIDialog.DialogContent>
     </UIDialog.Dialog>

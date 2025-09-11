@@ -11,8 +11,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/sonner';
 import { MapPin, DollarSign, Filter, Plus, Search, Eye, Edit } from 'lucide-react';
+import { BillboardGridCard } from '@/components/BillboardGridCard';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandGroup, CommandInput, CommandItem, CommandList, CommandEmpty } from '@/components/ui/command';
 import { Billboard } from '@/types';
-import { loadBillboards } from '@/services/billboardService';
+import { loadBillboards, searchBillboards } from '@/services/billboardService';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 
 export default function Billboards() {
@@ -22,6 +25,9 @@ export default function Billboards() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
   const [selectedCities, setSelectedCities] = useState<string[]>([]);
+  const [sizeFilter, setSizeFilter] = useState<string>('all');
+  const [municipalityFilter, setMunicipalityFilter] = useState<string>('all');
+  const [adTypeFilter, setAdTypeFilter] = useState<string>('all');
   const [editOpen, setEditOpen] = useState(false);
   const [editing, setEditing] = useState<Billboard | null>(null);
   const [editForm, setEditForm] = useState<any>({});
@@ -32,7 +38,7 @@ export default function Billboards() {
   const [addForm, setAddForm] = useState<any>({});
   const [adding, setAdding] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const PAGE_SIZE = 40;
+  const PAGE_SIZE = 10;
 
   const openEdit = (bb: Billboard) => {
     setEditing(bb);
@@ -152,13 +158,16 @@ export default function Billboards() {
   const municipalities = [...new Set(billboards.map(b => (b as any).Municipality || (b as any).municipality).filter(Boolean))];
   const districts = [...new Set(billboards.map(b => (b as any).District || (b as any).district).filter(Boolean))];
   const levels = [...new Set(billboards.map(b => (b as any).Level || b.level).filter(Boolean))];
-  const filteredBillboards = billboards.filter((billboard) => {
-    const matchesSearch = billboard.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         billboard.location.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(billboard.status);
-    const matchesCity = selectedCities.length === 0 || selectedCities.includes(billboard.city);
-    
-    return matchesSearch && matchesStatus && matchesCity;
+  const uniqueAdTypes = [...new Set(billboards.map((b:any) => (b.Ad_Type ?? b['Ad Type'] ?? b.adType ?? '')).filter(Boolean))] as string[];
+  const searched = searchBillboards(billboards, searchQuery);
+  const filteredBillboards = searched.filter((billboard) => {
+    const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(billboard.status as any);
+    const matchesCity = selectedCities.length === 0 || selectedCities.includes((billboard.city || '') as any);
+    const matchesSize = sizeFilter === 'all' || ((billboard as any).Size || billboard.size) === sizeFilter;
+    const matchesMunicipality = municipalityFilter === 'all' || ((billboard as any).Municipality || (billboard as any).municipality || '') === municipalityFilter;
+    const adTypeVal = String((billboard as any).Ad_Type ?? (billboard as any)['Ad Type'] ?? (billboard as any).adType ?? '');
+    const matchesAdType = adTypeFilter === 'all' || adTypeVal === adTypeFilter;
+    return matchesStatus && matchesCity && matchesSize && matchesMunicipality && matchesAdType;
   });
 
   const totalPages = Math.max(1, Math.ceil(filteredBillboards.length / PAGE_SIZE));
@@ -231,20 +240,47 @@ export default function Billboards() {
               placeholder="جميع المدن"
             />
 
-            <div className="flex gap-2">
-              <Button variant="outline" className="flex-1">
-                سنة كاملة
-              </Button>
-              <Button variant="outline" className="px-3">
-                6 أشهر
-              </Button>
-              <Button variant="outline" className="px-3">
-                3 أشهر
-              </Button>
-              <Button variant="default" className="px-3 bg-primary">
-                شهر واحد
-              </Button>
-            </div>
+            <Select value={sizeFilter} onValueChange={setSizeFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="حجم اللوحة" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">جميع الأحجام</SelectItem>
+                {sizes.map((s) => (<SelectItem key={String(s)} value={String(s)}>{String(s)}</SelectItem>))}
+              </SelectContent>
+            </Select>
+
+            <Select value={municipalityFilter} onValueChange={setMunicipalityFilter}>
+              <SelectTrigger>
+                <SelectValue placeholder="البلدية" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">جميع البلديات</SelectItem>
+                {municipalities.map((m) => (<SelectItem key={String(m)} value={String(m)}>{String(m)}</SelectItem>))}
+              </SelectContent>
+            </Select>
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  {adTypeFilter === 'all' ? 'نوع الإعلان (الكل)' : `نوع الإعلان: ${adTypeFilter}`}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-72 p-0" align="start">
+                <Command>
+                  <CommandInput placeholder="ابحث عن نوع الإعلان..." />
+                  <CommandList>
+                    <CommandEmpty>لا يوجد نتائج</CommandEmpty>
+                    <CommandGroup>
+                      <CommandItem onSelect={() => setAdTypeFilter('all')}>الكل</CommandItem>
+                      {uniqueAdTypes.map((t) => (
+                        <CommandItem key={t} onSelect={() => setAdTypeFilter(t)}>{t}</CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
           </div>
         </CardContent>
       </Card>
@@ -252,59 +288,15 @@ export default function Billboards() {
       {/* عرض اللوحات */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {pagedBillboards.map((billboard) => (
-          <Card key={billboard.id} className="bg-gradient-card border-0 shadow-card hover:shadow-elegant transition-smooth overflow-hidden">
-            <div className="relative">
-              <img
-                src={billboard.image || "/placeholder.svg"}
-                alt={billboard.name}
-                className="w-full h-48 object-cover"
-              />
-              <div className="absolute top-4 right-4">
-                {getStatusBadge(billboard.status)}
-              </div>
-              <div className="absolute top-4 left-4">
-                <Badge className="bg-primary text-primary-foreground border-primary">
-                  {billboard.size}
-                </Badge>
-              </div>
+          <div key={billboard.id} className="space-y-2">
+            <BillboardGridCard billboard={billboard as any} showBookingActions={false} />
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" className="flex-1" onClick={() => openEdit(billboard)}>
+                <Edit className="h-4 w-4 ml-1" />
+                تعديل
+              </Button>
             </div>
-            
-            <CardContent className="p-6">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="font-bold text-lg text-foreground mb-1">{billboard.name}</h3>
-                  <div className="flex items-center gap-2 text-muted-foreground text-sm">
-                    <MapPin className="h-4 w-4" />
-                    <span>{billboard.location}</span>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-muted-foreground">السعر الشهري:</span>
-                    <span className="font-semibold text-primary">{billboard.price?.toLocaleString()} د.ل/شهر</span>
-                  </div>
-                  {billboard.installationPrice && (
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">سعر التركيب:</span>
-                      <span className="font-semibold text-muted-foreground">{billboard.installationPrice?.toLocaleString()} د.ل</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex gap-2 pt-2">
-                  <Button variant="outline" size="sm" className="flex-1">
-                    <Eye className="h-4 w-4 ml-1" />
-                    Details
-                  </Button>
-                  <Button variant="outline" size="sm" className="flex-1" onClick={() => openEdit(billboard)}>
-                    <Edit className="h-4 w-4 ml-1" />
-                    تعديل
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+          </div>
         ))}
       </div>
 
@@ -391,7 +383,7 @@ export default function Billboards() {
             <div>
               <Label>المقاس</Label>
               <Select value={editForm.Size || ''} onValueChange={(v) => setEditForm((p: any) => ({ ...p, Size: v }))}>
-                <SelectTrigger><SelectValue placeholder="اختر المقاس" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="��ختر المقاس" /></SelectTrigger>
                 <SelectContent>
                   {sizes.map((s) => (<SelectItem key={s} value={s as string}>{s}</SelectItem>))}
                 </SelectContent>

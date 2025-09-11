@@ -66,7 +66,12 @@ export async function createContract(contractData: ContractData) {
     'End Date': contractPayload.end_date,
     'Total Rent': contractPayload.rent_cost,
     'Discount': contractPayload.discount ?? null
-  };
+  } as any;
+  if ((contractData as any)['Payment 1'] !== undefined) insertPayload['Payment 1'] = (contractData as any)['Payment 1'];
+  if ((contractData as any)['Payment 2'] !== undefined) insertPayload['Payment 2'] = (contractData as any)['Payment 2'];
+  if ((contractData as any)['Payment 3'] !== undefined) insertPayload['Payment 3'] = (contractData as any)['Payment 3'];
+  if ((contractData as any)['Total Paid'] !== undefined) insertPayload['Total Paid'] = (contractData as any)['Total Paid'];
+  if ((contractData as any)['Remaining'] !== undefined) insertPayload['Remaining'] = (contractData as any)['Remaining'];
   if (customer_id) insertPayload.customer_id = customer_id;
 
   console.log('Insert payload:', insertPayload);
@@ -99,7 +104,7 @@ export async function createContract(contractData: ContractData) {
   if (contractError || !contract) {
     console.log('Trying contracts table...');
     try {
-      const contractsPayload = {
+      const contractsPayload: any = {
         customer_name: contractPayload.customer_name,
         ad_type: contractPayload.ad_type || '',
         start_date: contractPayload.start_date,
@@ -107,6 +112,8 @@ export async function createContract(contractData: ContractData) {
         rent_cost: contractPayload.rent_cost,
         discount: contractPayload.discount ?? null
       };
+      if ((contractData as any)['Total Paid'] !== undefined) contractsPayload.total_paid = (contractData as any)['Total Paid'];
+      if ((contractData as any)['Remaining'] !== undefined) contractsPayload.remaining = (contractData as any)['Remaining'];
       if (customer_id) contractsPayload.customer_id = customer_id;
 
       const { data, error } = await supabase
@@ -260,7 +267,7 @@ export async function getContractWithBillboards(contractId: string): Promise<any
       contractError = e;
     }
 
-    // إذا فشل، جرب جدول contracts
+    // إذا فشل، ج��ب جدول contracts
     if (contractError || !contractResult?.data) {
       try {
         const result = await supabase

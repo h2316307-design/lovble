@@ -296,7 +296,7 @@ const Dashboard = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle>إدارة اللوحات</CardTitle>
-                    <CardDescription>عرض وإدارة جميع اللوحات الإعلانية</CardDescription>
+                    <CardDescription>عرض وإدا��ة جميع اللوحات الإعلانية</CardDescription>
                   </div>
                   <Button className="gap-2">
                     <Building className="h-4 w-4" />
@@ -325,7 +325,7 @@ const Dashboard = () => {
 
             {/* شبكة اللوحات */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredBillboards.map((billboard) => (
+              {filteredBillboards.slice(0, 10).map((billboard) => (
                 <BillboardGridCard
                   key={billboard.ID}
                   billboard={billboard}

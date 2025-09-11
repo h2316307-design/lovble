@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
+import { Edit, Trash2 } from 'lucide-react';
 
 interface PaymentRow {
   id: string;
@@ -24,9 +25,11 @@ interface PaymentRow {
 interface ContractRow {
   Contract_Number: string | null;
   "Customer Name": string | null;
+  "Ad Type": string | null;
   "Total Rent": string | number | null;
   "Start Date"?: string | null;
   "End Date"?: string | null;
+  customer_id?: string | null;
 }
 
 export default function Customers() {
@@ -35,6 +38,7 @@ export default function Customers() {
   const [customers, setCustomers] = useState<{id:string; name:string; phone?: string | null; company?: string | null}[]>([]);
   const [search, setSearch] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
+  const [selectedCustomerName, setSelectedCustomerName] = useState<string>('');
   const [dialogOpen, setDialogOpen] = useState(false);
 
   // add/edit customer states
@@ -45,34 +49,74 @@ export default function Customers() {
   const [customerCompanyInput, setCustomerCompanyInput] = useState('');
   const [syncing, setSyncing] = useState(false);
 
-  useEffect(() => {
-    (async () => {
+  // edit receipt states
+  const [editReceiptOpen, setEditReceiptOpen] = useState(false);
+  const [editingReceipt, setEditingReceipt] = useState<PaymentRow | null>(null);
+  const [receiptAmount, setReceiptAmount] = useState('');
+  const [receiptMethod, setReceiptMethod] = useState('');
+  const [receiptReference, setReceiptReference] = useState('');
+  const [receiptNotes, setReceiptNotes] = useState('');
+  const [receiptDate, setReceiptDate] = useState('');
+
+  const loadData = async () => {
+    try {
+      console.log('Loading data...');
       const [pRes, cRes, cuRes] = await Promise.all([
-        supabase.from('customer_payments').select('id,customer_id,customer_name,contract_number,amount,method,reference,notes,paid_at,entry_type').order('paid_at', { ascending: false }),
-        supabase.from('Contract').select('Contract_Number, "Customer Name", "Total Rent", "Contract Date", "Start Date", "End Date", customer_id'),
-        supabase.from('customers').select('id,name,phone,company').order('name', { ascending: true })
+        supabase.from('customer_payments').select('*').order('paid_at', { ascending: false }),
+        supabase.from('Contract').select('*'),
+        supabase.from('customers').select('*').order('name', { ascending: true })
       ]);
 
-      if (!pRes.error) setPayments((pRes.data || []) as any);
-      if (!cRes.error) setContracts((cRes.data || []) as any);
-      if (!cuRes.error) setCustomers((cuRes.data || []) as any);
-    })();
+      console.log('Payments result:', pRes);
+      console.log('Contracts result:', cRes);
+      console.log('Customers result:', cuRes);
+
+      if (pRes.error) {
+        console.error('Payments error:', pRes.error);
+      } else {
+        setPayments(pRes.data || []);
+      }
+
+      if (cRes.error) {
+        console.error('Contracts error:', cRes.error);
+      } else {
+        setContracts(cRes.data || []);
+      }
+
+      if (cuRes.error) {
+        console.error('Customers error:', cuRes.error);
+      } else {
+        setCustomers(cuRes.data || []);
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+      toast.error('خطأ في تحميل البيانات');
+    }
+  };
+
+  useEffect(() => {
+    loadData();
   }, []);
 
   // Build summary per customer using customers table, payments + contracts
   const customersSummary = useMemo(() => {
+    console.log('Building customer summary...');
+    console.log('Customers:', customers);
+    console.log('Contracts:', contracts);
+    console.log('Payments:', payments);
+
     // initialize map from customers list
     const map = new Map<string, { id: string; name: string; contractsCount: number; totalRent: number; totalPaid: number }>();
     for (const c of (customers || [])) {
-      const id = (c as any).id;
-      const name = (c as any).name || '—';
+      const id = c.id;
+      const name = c.name || '—';
       map.set(id, { id, name, contractsCount: 0, totalRent: 0, totalPaid: 0 });
     }
 
     // contracts info
     for (const ct of contracts) {
-      const cid = (ct as any).customer_id ?? null;
-      const rent = Number((ct as any)['Total Rent'] || 0) || 0;
+      const cid = ct.customer_id ?? null;
+      const rent = Number(ct['Total Rent'] || 0) || 0;
       if (cid && map.has(cid)) {
         const cur = map.get(cid)!;
         cur.contractsCount += 1;
@@ -110,7 +154,9 @@ export default function Customers() {
       }
     }
 
-    return Array.from(map.values()).sort((a, b) => b.totalRent - a.totalRent);
+    const result = Array.from(map.values()).sort((a, b) => b.totalRent - a.totalRent);
+    console.log('Customer summary result:', result);
+    return result;
   }, [payments, contracts, customers]);
 
   const totalAllPaid = payments.reduce((s, p) => s + (Number(p.amount) || 0), 0);
@@ -119,6 +165,8 @@ export default function Customers() {
   const [detailsPayments, setDetailsPayments] = useState<PaymentRow[]>([]);
 
   const openCustomer = async (idOrKey: string) => {
+    console.log('Opening customer details for:', idOrKey);
+    
     // idOrKey may be a real customer id, or a fallback key like 'name:Customer Name'
     let id = idOrKey;
     let nameFallback: string | null = null;
@@ -127,15 +175,30 @@ export default function Customers() {
       id = '';
     }
 
+    // Find customer name for dialog title
+    const customer = customers.find(c => c.id === id);
+    const customerName = customer?.name || nameFallback || 'غير معروف';
+    
+    console.log('Customer found:', customer);
+    console.log('Customer name:', customerName);
+    
     setSelectedCustomer(idOrKey);
+    setSelectedCustomerName(customerName);
     setDialogOpen(true);
 
     try {
       // First fetch payments for this customer (by id), fallback to name
-      let paymentsData: any[] = [];
+      let paymentsData: PaymentRow[] = [];
 
       if (id) {
-        const pRes: any = await supabase.from('customer_payments').select('id,customer_id,customer_name,contract_number,amount,method,reference,notes,paid_at,entry_type').eq('customer_id', id).order('paid_at', { ascending: false });
+        console.log('Fetching payments by customer_id:', id);
+        const pRes = await supabase
+          .from('customer_payments')
+          .select('*')
+          .eq('customer_id', id)
+          .order('paid_at', { ascending: false });
+        
+        console.log('Payments by ID result:', pRes);
         paymentsData = pRes.data || [];
       }
 
@@ -144,7 +207,14 @@ export default function Customers() {
       const name = cust?.name || nameFallback || null;
 
       if ((!paymentsData || paymentsData.length === 0) && name) {
-        const pByName = await supabase.from('customer_payments').select('id,customer_id,customer_name,contract_number,amount,method,reference,notes,paid_at,entry_type').ilike('customer_name', name).order('paid_at', { ascending: false });
+        console.log('Fetching payments by customer name:', name);
+        const pByName = await supabase
+          .from('customer_payments')
+          .select('*')
+          .ilike('customer_name', `%${name}%`)
+          .order('paid_at', { ascending: false });
+        
+        console.log('Payments by name result:', pByName);
         paymentsData = pByName.data || [];
       }
 
@@ -152,46 +222,70 @@ export default function Customers() {
 
       // collect contract numbers from payments
       const contractNumbers = Array.from(new Set((paymentsData || []).map((p:any)=>p.contract_number).filter(Boolean)));
+      console.log('Contract numbers from payments:', contractNumbers);
 
       // fetch contracts by customer_id if we have id, otherwise by name or contract numbers
-      let contractsData: any[] = [];
+      let contractsData: ContractRow[] = [];
 
       if (id) {
-        const contractsById = await supabase.from('Contract').select('Contract_Number, "Customer Name", "Total Rent", "Contract Date", "Start Date", "End Date", customer_id').eq('customer_id', id);
+        console.log('Fetching contracts by customer_id:', id);
+        const contractsById = await supabase
+          .from('Contract')
+          .select('*')
+          .eq('customer_id', id);
+        
+        console.log('Contracts by ID result:', contractsById);
         contractsData = contractsById.data || [];
       }
 
       if ((contractsData || []).length === 0 && name) {
-        const byName = await supabase.from('Contract').select('Contract_Number, "Customer Name", "Total Rent", "Contract Date", "Start Date", "End Date", customer_id').ilike('Customer Name', name);
+        console.log('Fetching contracts by customer name:', name);
+        const byName = await supabase
+          .from('Contract')
+          .select('*')
+          .ilike('Customer Name', `%${name}%`);
+        
+        console.log('Contracts by name result:', byName);
         contractsData = byName.data || [];
       }
 
       if ((contractsData || []).length === 0 && contractNumbers.length > 0) {
+        console.log('Fetching contracts by contract numbers:', contractNumbers);
         // attempt fetching by contract numbers
-        const byNumbers = await supabase.from('Contract').select('Contract_Number, "Customer Name", "Total Rent", "Contract Date", "Start Date", "End Date", customer_id').in('Contract_Number', contractNumbers);
+        const byNumbers = await supabase
+          .from('Contract')
+          .select('*')
+          .in('Contract_Number', contractNumbers);
+        
+        console.log('Contracts by numbers result:', byNumbers);
         contractsData = byNumbers.data || [];
       }
 
       // dedupe by Contract_Number
       const seen = new Set();
-      const deduped = [] as any[];
+      const deduped = [] as ContractRow[];
       for (const c of contractsData) {
         const key = String(c.Contract_Number || c['Contract Number'] || JSON.stringify(c));
-        if (!seen.has(key)) { seen.add(key); deduped.push(c); }
+        if (!seen.has(key)) { 
+          seen.add(key); 
+          deduped.push(c); 
+        }
       }
 
+      console.log('Final contracts data:', deduped);
       setDetailsContracts(deduped);
     } catch (e) {
-      console.warn('openCustomer error', e);
+      console.error('openCustomer error', e);
       setDetailsContracts([]);
       setDetailsPayments([]);
+      toast.error('خطأ في تحميل بيانات العميل');
     }
   };
-
 
   const closeDialog = () => {
     setDialogOpen(false);
     setSelectedCustomer(null);
+    setSelectedCustomerName('');
     setDetailsContracts([]);
     setDetailsPayments([]);
   };
@@ -199,23 +293,197 @@ export default function Customers() {
   const customerContracts = detailsContracts;
   const customerPayments = detailsPayments;
 
+  const openEditReceipt = (payment: PaymentRow) => {
+    setEditingReceipt(payment);
+    setReceiptAmount(String(payment.amount || ''));
+    setReceiptMethod(payment.method || '');
+    setReceiptReference(payment.reference || '');
+    setReceiptNotes(payment.notes || '');
+    setReceiptDate(payment.paid_at ? payment.paid_at.split('T')[0] : '');
+    setEditReceiptOpen(true);
+  };
+
+  const saveReceiptEdit = async () => {
+    if (!editingReceipt) return;
+    
+    try {
+      const { error } = await supabase
+        .from('customer_payments')
+        .update({
+          amount: Number(receiptAmount) || 0,
+          method: receiptMethod || null,
+          reference: receiptReference || null,
+          notes: receiptNotes || null,
+          paid_at: receiptDate ? new Date(receiptDate).toISOString() : null
+        })
+        .eq('id', editingReceipt.id);
+
+      if (error) {
+        console.error('Error updating receipt:', error);
+        toast.error('فشل في تحديث الإيصال');
+      } else {
+        toast.success('تم تحديث الإيصال بنجاح');
+        setEditReceiptOpen(false);
+        setEditingReceipt(null);
+        // Refresh the payments data
+        if (selectedCustomer) {
+          openCustomer(selectedCustomer);
+        }
+        loadData();
+      }
+    } catch (e) {
+      console.error('Save receipt error:', e);
+      toast.error('خطأ في حفظ الإيصال');
+    }
+  };
+
+  const deleteReceipt = async (paymentId: string) => {
+    if (!window.confirm('هل أنت متأكد من حذف هذا الإيصال؟')) return;
+    
+    try {
+      const { error } = await supabase
+        .from('customer_payments')
+        .delete()
+        .eq('id', paymentId);
+
+      if (error) {
+        console.error('Error deleting receipt:', error);
+        toast.error('فشل في حذف الإيصال');
+      } else {
+        toast.success('تم حذف الإيصال بنجاح');
+        // Refresh the payments data
+        if (selectedCustomer) {
+          openCustomer(selectedCustomer);
+        }
+        loadData();
+      }
+    } catch (e) {
+      console.error('Delete receipt error:', e);
+      toast.error('خطأ في حذف الإيصال');
+    }
+  };
+
   const printReceipt = (payment: PaymentRow) => {
     const html = `
-      <html dir="rtl"><head><meta charset="utf-8"><title>إيصال دفع</title></head>
-      <body>
-        <div style="font-family: sans-serif; padding:20px; max-width:600px; margin:auto;">
-          <h2>إيصال دفع</h2>
-          <p><strong>العميل:</strong> ${payment.customer_name}</p>
-          <p><strong>العقد:</strong> ${payment.contract_number || '—'}</p>
-          <p><strong>المبلغ:</strong> ${(Number(payment.amount)||0).toLocaleString('ar-LY')} د.ل</p>
-          <p><strong>الطريقة:</strong> ${payment.method || '—'}</p>
-          <p><strong>المرجع:</strong> ${payment.reference || '—'}</p>
-          <p><strong>التاريخ:</strong> ${payment.paid_at ? new Date(payment.paid_at).toLocaleString('ar-LY') : ''}</p>
-          <hr />
-          <p>شكر��ً لتعاملكم.</p>
-        </div>
-        <script>window.print();</script>
-      </body></html>`;
+      <html dir="rtl">
+        <head>
+          <meta charset="utf-8">
+          <title>إيصال دفع</title>
+          <style>
+            body { 
+              font-family: 'Arial', sans-serif; 
+              padding: 20px; 
+              max-width: 600px; 
+              margin: auto;
+              background: white;
+              color: black;
+            }
+            .header {
+              text-align: center;
+              border-bottom: 2px solid #333;
+              padding-bottom: 20px;
+              margin-bottom: 30px;
+            }
+            .title {
+              font-size: 28px;
+              font-weight: bold;
+              color: #2c5aa0;
+              margin-bottom: 10px;
+            }
+            .company {
+              font-size: 16px;
+              color: #666;
+            }
+            .content {
+              line-height: 2;
+            }
+            .row {
+              display: flex;
+              justify-content: space-between;
+              padding: 8px 0;
+              border-bottom: 1px solid #eee;
+            }
+            .label {
+              font-weight: bold;
+              color: #333;
+            }
+            .value {
+              color: #555;
+            }
+            .amount {
+              font-size: 24px;
+              font-weight: bold;
+              color: #2c5aa0;
+              text-align: center;
+              padding: 20px;
+              background: #f8f9fa;
+              border-radius: 8px;
+              margin: 20px 0;
+            }
+            .footer {
+              text-align: center;
+              margin-top: 40px;
+              padding-top: 20px;
+              border-top: 1px solid #ddd;
+              color: #666;
+            }
+            @media print {
+              body { margin: 0; padding: 20px; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="title">إيصال دفع</div>
+            <div class="company">شركة الفارس الذهبي للدعاية والإعلان</div>
+          </div>
+          
+          <div class="content">
+            <div class="row">
+              <span class="label">اسم العميل:</span>
+              <span class="value">${payment.customer_name || '—'}</span>
+            </div>
+            <div class="row">
+              <span class="label">رقم العقد:</span>
+              <span class="value">${payment.contract_number || '—'}</span>
+            </div>
+            <div class="row">
+              <span class="label">طريقة الدفع:</span>
+              <span class="value">${payment.method || '—'}</span>
+            </div>
+            <div class="row">
+              <span class="label">المرجع:</span>
+              <span class="value">${payment.reference || '—'}</span>
+            </div>
+            <div class="row">
+              <span class="label">التاريخ:</span>
+              <span class="value">${payment.paid_at ? new Date(payment.paid_at).toLocaleString('ar-LY') : '—'}</span>
+            </div>
+            ${payment.notes ? `
+            <div class="row">
+              <span class="label">ملاحظات:</span>
+              <span class="value">${payment.notes}</span>
+            </div>
+            ` : ''}
+          </div>
+          
+          <div class="amount">
+            المبلغ المدفوع: ${(Number(payment.amount)||0).toLocaleString('ar-LY')} دينار ليبي
+          </div>
+          
+          <div class="footer">
+            <p>شكراً لتعاملكم معنا</p>
+            <p>تم إنشاء هذا الإيصال في: ${new Date().toLocaleString('ar-LY')}</p>
+          </div>
+          
+          <script>
+            window.onload = function() {
+              window.print();
+            }
+          </script>
+        </body>
+      </html>`;
+    
     const w = window.open('', '_blank');
     if (w) {
       w.document.open();
@@ -359,7 +627,7 @@ export default function Customers() {
                     <TableCell>{(c.totalRent - c.totalPaid).toLocaleString('ar-LY')} د.ل</TableCell>
                     <TableCell>
                       <div className="flex gap-2">
-                        <Button size="sm" onClick={() => openCustomer(c.id)}>عرض</Button>
+                        <Button size="sm" onClick={() => openCustomer(c.id)}>عرض فواتير الزبون</Button>
                         <Button size="sm" variant="outline" onClick={() => { setEditingCustomerId(c.id); setCustomerNameInput(c.name); setCustomerPhoneInput((c as any).phone || ''); setCustomerCompanyInput((c as any).company || ''); setNewCustomerOpen(true); }}>تعديل</Button>
                       </div>
                     </TableCell>
@@ -367,7 +635,7 @@ export default function Customers() {
                 ))}
                 {visible.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-6">لا توجد بيانات</TableCell>
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-6">لا توجد بيانات</TableCell>
                   </TableRow>
                 )}
               </TableBody>
@@ -377,73 +645,199 @@ export default function Customers() {
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>تفاصيل العميل {selectedCustomer}</DialogTitle>
+            <DialogTitle className="text-xl">فواتير وعقود العميل: {selectedCustomerName}</DialogTitle>
           </DialogHeader>
 
           {selectedCustomer && (
-            <div className="space-y-4">
+            <div className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle>عقود {selectedCustomer} ({customerContracts.length})</CardTitle>
+                  <CardTitle className="flex items-center justify-between">
+                    <span>عقود العميل ({customerContracts.length})</span>
+                    <span className="text-sm text-muted-foreground">إجمالي قيمة العقود</span>
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-1 gap-2">
-                    {customerContracts.map(ct => {
-                      const paidForContract = payments.filter(p => (p.contract_number||'') === (ct.Contract_Number||'')).reduce((s, x) => s + (Number(x.amount)||0), 0);
-                      const totalRent = Number(ct['Total Rent'] || 0) || 0;
-                      const remaining = Math.max(0, totalRent - paidForContract);
-                      return (
-                        <div key={ct.Contract_Number} className="flex items-center justify-between border rounded p-3">
-                          <div>
-                            <div className="font-medium">عقد: {ct.Contract_Number}</div>
-                            <div className="text-sm text-muted-foreground">{ct['Start Date'] || ct['Contract Date'] || '—'} → {ct['End Date'] || '—'}</div>
-                          </div>
-                          <div className="text-right">
-                            <div>الإجمالي: {totalRent.toLocaleString('ar-LY')} د.ل</div>
-                            <div>مدفوع: {paidForContract.toLocaleString('ar-LY')} د.ل</div>
-                            <div>المتبقي: {remaining.toLocaleString('ar-LY')} د.ل</div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                    {customerContracts.length === 0 && (<div className="text-sm text-muted-foreground">لا توجد عقود لهذا العميل</div>)}
-                  </div>
+                  {customerContracts.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>رقم العقد</TableHead>
+                            <TableHead>نوع الإعلان</TableHead>
+                            <TableHead>تاريخ البداية</TableHead>
+                            <TableHead>تاريخ النهاية</TableHead>
+                            <TableHead>القيمة الإجمالية</TableHead>
+                            <TableHead>المدفوع</TableHead>
+                            <TableHead>المتبقي</TableHead>
+                            <TableHead>الحالة</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {customerContracts.map(ct => {
+                            const paidForContract = customerPayments.filter(p => (p.contract_number||'') === (ct.Contract_Number||'')).reduce((s, x) => s + (Number(x.amount)||0), 0);
+                            const totalRent = Number(ct['Total Rent'] || 0) || 0;
+                            const remaining = Math.max(0, totalRent - paidForContract);
+                            const endDate = ct['End Date'] ? new Date(ct['End Date']) : null;
+                            const today = new Date();
+                            const isExpired = endDate && endDate < today;
+                            const isActive = endDate && endDate >= today;
+                            
+                            return (
+                              <TableRow key={ct.Contract_Number}>
+                                <TableCell className="font-medium">{ct.Contract_Number}</TableCell>
+                                <TableCell>{ct['Ad Type'] || '—'}</TableCell>
+                                <TableCell>{ct['Start Date'] ? new Date(ct['Start Date']).toLocaleDateString('ar-LY') : '—'}</TableCell>
+                                <TableCell>{ct['End Date'] ? new Date(ct['End Date']).toLocaleDateString('ar-LY') : '—'}</TableCell>
+                                <TableCell className="font-semibold">{totalRent.toLocaleString('ar-LY')} د.ل</TableCell>
+                                <TableCell className="text-green-600">{paidForContract.toLocaleString('ar-LY')} د.ل</TableCell>
+                                <TableCell className={remaining > 0 ? 'text-red-600 font-semibold' : 'text-green-600'}>{remaining.toLocaleString('ar-LY')} د.ل</TableCell>
+                                <TableCell>
+                                  {isExpired ? (
+                                    <span className="px-2 py-1 bg-red-100 text-red-800 rounded text-xs">منتهي</span>
+                                  ) : isActive ? (
+                                    <span className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">نشط</span>
+                                  ) : (
+                                    <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded text-xs">غير محدد</span>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <p>لا توجد عقود مسجلة لهذا العميل</p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
               <Card>
                 <CardHeader>
-                  <CardTitle>الدفعات والإيصالات</CardTitle>
+                  <CardTitle>سجل الدفعات والإيصالات ({customerPayments.length})</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-2">
-                    {customerPayments.map(p => (
-                      <div key={p.id} className="flex items-center justify-between border rounded p-3">
-                        <div>
-                          <div className="font-medium">{p.contract_number || '—'}</div>
-                          <div className="text-sm text-muted-foreground">{p.reference || ''}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-semibold">{(Number(p.amount)||0).toLocaleString('ar-LY')} د.ل</div>
-                          <div className="text-xs text-muted-foreground">{p.paid_at ? new Date(p.paid_at).toLocaleString('ar-LY') : '—'}</div>
-                          <div className="mt-2">
-                            <Button size="sm" onClick={() => printReceipt(p)}>طباعة إيصال</Button>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    {customerPayments.length === 0 && (<div className="text-sm text-muted-foreground">لا توجد دفعات</div>)}
-                  </div>
+                  {customerPayments.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>رقم العقد</TableHead>
+                            <TableHead>المبلغ</TableHead>
+                            <TableHead>طريقة الدفع</TableHead>
+                            <TableHead>المرجع</TableHead>
+                            <TableHead>تاريخ الدفع</TableHead>
+                            <TableHead>ملاحظات</TableHead>
+                            <TableHead>إجراءات</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {customerPayments.map(p => (
+                            <TableRow key={p.id}>
+                              <TableCell className="font-medium">{p.contract_number || '—'}</TableCell>
+                              <TableCell className="font-semibold text-green-600">{(Number(p.amount)||0).toLocaleString('ar-LY')} د.ل</TableCell>
+                              <TableCell>{p.method || '—'}</TableCell>
+                              <TableCell>{p.reference || '—'}</TableCell>
+                              <TableCell>{p.paid_at ? new Date(p.paid_at).toLocaleDateString('ar-LY') : '—'}</TableCell>
+                              <TableCell>{p.notes || '—'}</TableCell>
+                              <TableCell>
+                                <div className="flex gap-2">
+                                  <Button size="sm" onClick={() => printReceipt(p)} className="bg-blue-600 hover:bg-blue-700 text-white">
+                                    طباعة إيصال
+                                  </Button>
+                                  <Button size="sm" variant="outline" onClick={() => openEditReceipt(p)}>
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                  <Button size="sm" variant="destructive" onClick={() => deleteReceipt(p.id)}>
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <p>لا توجد دفعات مسجلة لهذا العميل</p>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
-              <div className="flex justify-end">
+              <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={closeDialog}>إغلاق</Button>
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Receipt Dialog */}
+      <Dialog open={editReceiptOpen} onOpenChange={setEditReceiptOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>تعديل الإيصال</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div>
+              <label className="text-sm font-medium">المبلغ</label>
+              <Input
+                type="number"
+                value={receiptAmount}
+                onChange={(e) => setReceiptAmount(e.target.value)}
+                placeholder="المبلغ"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">طريقة الدفع</label>
+              <Select value={receiptMethod} onValueChange={setReceiptMethod}>
+                <SelectTrigger>
+                  <SelectValue placeholder="اختر طريقة الدفع" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="نقدي">نقدي</SelectItem>
+                  <SelectItem value="تحويل بنكي">تحويل بنكي</SelectItem>
+                  <SelectItem value="شيك">شيك</SelectItem>
+                  <SelectItem value="بطاقة ائتمان">بطاقة ائتمان</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium">المرجع</label>
+              <Input
+                value={receiptReference}
+                onChange={(e) => setReceiptReference(e.target.value)}
+                placeholder="رقم المرجع أو الشيك"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">تاريخ الدفع</label>
+              <Input
+                type="date"
+                value={receiptDate}
+                onChange={(e) => setReceiptDate(e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium">ملاحظات</label>
+              <Input
+                value={receiptNotes}
+                onChange={(e) => setReceiptNotes(e.target.value)}
+                placeholder="ملاحظات إضافية"
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setEditReceiptOpen(false)}>إلغاء</Button>
+              <Button onClick={saveReceiptEdit}>حفظ التعديلات</Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

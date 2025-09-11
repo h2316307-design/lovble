@@ -121,7 +121,7 @@ const Index = () => {
         (statusFilter === 'maintenance' && isMaintenance) ||
         (statusFilter === 'near-expiry' && isNearExpiry);
     } else {
-      // الزوار: لا تظهر المحجوز إطلاقاً حتى مع البحث، ولا تعرض القريبة الانتهاء
+      // الز��ار: لا تظهر المحجوز إطلاقاً حتى مع البحث، ولا تعرض القريبة الانتهاء
       if (!user) {
         finalStatusMatch = (statusFilter === 'available' || statusFilter === 'all') ? isAvailable : false;
       } else {
@@ -442,7 +442,7 @@ const Index = () => {
 
         {/* Billboards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredBillboards.map((billboard) => (
+          {filteredBillboards.slice(0, 10).map((billboard) => (
             <BillboardGridCard
               key={billboard.ID}
               billboard={billboard}
