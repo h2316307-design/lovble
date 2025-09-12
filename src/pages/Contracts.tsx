@@ -667,138 +667,50 @@ export default function Contracts() {
                                 const total = perItem * qty;
                                 return `<tr><td>${idx + 1}</td><td>${name}</td><td>${specs}</td><td>${qty}</td><td>${unit}</td><td>${formatCurrency(price)}</td><td>${formatCurrency(total)}</td></tr>`;
                               }).join('');
-                              const html = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>طباعة عقد ${contractNumber}</title><link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap" rel="stylesheet"><style>
-@import url('https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap');
-.print-container{font-family:'Amiri',serif;max-width:210mm;margin:0 auto;padding:20mm;background:white;color:#333;line-height:1.6}
-.header-section{display:flex;align-items:center;justify-content:space-between;margin-bottom:30px;border-bottom:3px solid #2c5aa0;padding-bottom:20px}
-.company-logo .logo{max-height:80px;width:auto}
-.company-info{text-align:center;flex:1}
-.company-name{font-size:28px;font-weight:700;color:#2c5aa0;margin:0 0 10px 0}
-.company-subtitle{font-size:18px;color:#666;margin:0 0 15px 0}
-.contact-info p{margin:5px 0;font-size:14px;color:#555}
-.contract-title{text-align:center;margin-bottom:30px;background:#f8f9fa;padding:20px;border-radius:8px;border:2px solid #2c5aa0}
-.contract-title h2{font-size:24px;font-weight:700;color:#2c5aa0;margin:0 0 15px 0}
-.contract-number{display:flex;justify-content:space-between;font-size:16px;font-weight:600}
-.contract-details{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-bottom:30px}
-.party-info{background:#f8f9fa;padding:20px;border-radius:8px;border-right:4px solid #2c5aa0}
-.party-info h3{font-size:18px;font-weight:700;color:#2c5aa0;margin:0 0 15px 0}
-.party-info p{margin:8px 0;font-size:14px}
-.party-info strong{color:#333;font-weight:600}
-.contract-items{margin-bottom:30px}
-.contract-items h3{font-size:20px;font-weight:700;color:#2c5aa0;margin-bottom:15px}
-.items-table{width:100%;border-collapse:collapse;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
-.items-table th,.items-table td{border:1px solid #ddd;padding:12px 8px;text-align:center;font-size:14px}
-.items-table th{background:#2c5aa0;color:#fff;font-weight:700}
-.items-table tbody tr:nth-child(even){background:#f8f9fa}
-.items-table tbody tr:hover{background:#e9ecef}
-.total-row{background:#2c5aa0!important;color:#fff!important;font-weight:700}
-.total-row td{border-color:#2c5aa0}
-.contract-terms{margin-bottom:30px}
-.contract-terms h3{font-size:18px;font-weight:700;color:#2c5aa0;margin-bottom:15px}
-.terms-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}
-.term-item{background:#f8f9fa;padding:15px;border-radius:6px;border-right:3px solid #2c5aa0}
-.term-item strong{display:block;color:#2c5aa0;font-weight:600;margin-bottom:5px}
-.additional-terms{margin-bottom:30px}
-.additional-terms h3{font-size:18px;font-weight:700;color:#2c5aa0;margin-bottom:15px}
-.additional-terms ul{list-style:none;padding:0}
-.additional-terms li{background:#f8f9fa;margin:8px 0;padding:12px 15px;border-radius:6px;border-right:3px solid #2c5aa0;position:relative}
-.additional-terms li::before{content:"•";color:#2c5aa0;font-weight:bold;position:absolute;right:5px}
-.signatures-section{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-bottom:30px}
-.signature-box{border:2px solid #2c5aa0;border-radius:8px;padding:20px;background:#f8f9fa}
-.signature-box h4{font-size:16px;font-weight:700;color:#2c5aa0;margin:0 0 20px 0;text-align:center}
-.signature-line{margin:15px 0;padding:10px 0;border-bottom:1px solid #ccc}
-.signature-line span{font-size:14px;color:#555}
-.footer-section{text-align:center;padding-top:20px;border-top:2px solid #2c5aa0;color:#666;font-size:12px}
-.footer-section p{margin:5px 0}
-@media print{.print-container{margin:0;padding:15mm;box-shadow:none}.header-section{break-inside:avoid}.contract-title{break-inside:avoid}.items-table{break-inside:avoid}.signatures-section{break-inside:avoid;page-break-before:auto}.no-print{display:none!important}.items-table th{background:#2c5aa0!important;color:#fff!important;-webkit-print-color-adjust:exact}.total-row{background:#2c5aa0!important;color:#fff!important;-webkit-print-color-adjust:exact}}
-@media (max-width:768px){.header-section{flex-direction:column;text-align:center}.contract-details{grid-template-columns:1fr}.terms-grid{grid-template-columns:1fr}.signatures-section{grid-template-columns:1fr}.items-table{font-size:12px}.items-table th,.items-table td{padding:8px 4px}}
-.items-table{border-radius:8px;overflow:hidden}
-.items-table th:first-child,.items-table td:first-child{width:40px}
-.items-table th:nth-child(2),.items-table td:nth-child(2){width:150px;text-align:right}
-.items-table th:nth-child(3),.items-table td:nth-child(3){width:200px;text-align:right}
-.items-table th:last-child,.items-table td:last-child{width:100px;font-weight:600}
+                              const bgPage1 = 'https://cdn.builder.io/api/v1/image/assets%2Fd73591ac255749fab003760323583a62%2Fd4a92c2ed92644e9899c8df4a515c151?format=webp&width=1600';
+const bgPage2 = 'https://cdn.builder.io/api/v1/image/assets%2Fd73591ac255749fab003760323583a62%2F2e533f298c7a4c85b76338603e28bc30?format=webp&width=1600';
+const html = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>عقد رقم ${contractNumber}</title><link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap" rel="stylesheet"><style>
+@page{size:A4;margin:0}
+body{margin:0;font-family:'Amiri',serif;color:#111}
+.page{width:210mm;height:297mm;position:relative;page-break-after:always;background:#fff}
+.page .bg{position:absolute;inset:0;background-size:cover;background-repeat:no-repeat;background-position:center}
+.page .content{position:absolute;inset:0;padding:22mm 18mm}
+.header-line{display:flex;justify-content:space-between;font-weight:700;color:#000;margin-top:6mm}
+.h2{font-size:16pt;color:#000;margin:10mm 0 4mm 0}
+.meta{display:flex;gap:12mm;font-weight:700;margin:2mm 0 6mm}
+.bold{font-weight:700}
+.clauses p{margin:2.5mm 0;line-height:1.7}
+.box-sign{position:absolute;left:18mm;right:18mm;bottom:18mm;display:flex;justify-content:space-between;align-items:center}
+.table{width:100%;border-collapse:collapse;margin-top:18mm;background:#fff}
+.table th,.table td{border:1px solid #ddd;padding:3mm 2mm;font-size:10pt;text-align:center}
+.table th{background:#111;color:#fff}
+.small{font-size:10pt;color:#333}
 </style></head><body>
-  <div class="print-container" dir="rtl">
-    <div class="header-section">
-      <div class="company-logo"><img src="${BRAND_LOGO}" alt="شعار الشركة" class="logo" /></div>
-      <div class="company-info">
-        <h1 class="company-name">شركة معرض الطاقة للمقاولات العامة</h1>
-        <p class="company-subtitle">للمقاولات العامة والتجارة</p>
-        <div class="contact-info">
-          <p>الهاتف: 0913362676</p>
-          <p>العنوان: طرابلس - ليبيا</p>
-        </div>
-      </div>
+  <section class="page"><div class="bg" style="background-image:url(${bgPage1})"></div><div class="content">
+    <div class="header-line small"><div>التاريخ: ${formatDate(startDate)}</div><div>رقم العقد: ${contractNumber}</div></div>
+    <div class="h2"><span class="bold">نوع الإعلان:</span> ${adType || '—'}</div>
+    <div class="clauses">
+      <p>الطرف الأول: شركة الفارس الذهبي للدعاية والإعلان – طرابلس – طريق المطار – حي الأندلس. يمثله المدير المسؤول.</p>
+      <p>الطرف الثاني: ${buyerName || '—'} – هاتف: ${buyerPhone || '—'}.</p>
+      <p>المقدمة: نظرًا لرغبة الطرف الثاني في استئجار مساحات إعلانية من الطرف الأول، تم الاتفاق على الشروط التالية.</p>
+      <p>البند الأول: يلتزم الطرف الثاني بتجهيز التصميم في أسرع وقت وأي تأخير يعتبر مسؤوليته، وتبدأ مدة العقد من التاريخ المذكور في المادة السادسة.</p>
+      <p>البند الثاني: يلتزم الطرف الأول بطباعة وتركيب التصاميم بدقة على المساحات المتفق عليها وفق الجدول المرفق، ويتحمل الأخير تكاليف التغيير الناتجة عن الأحوال الجوية أو الحوادث.</p>
+      <p>البند الثالث: في حال وقوع ظروف قاهرة تؤثر على إحدى المساحات، يتم نقل الإعلان إلى موقع بديل، ويتولى الطرف الأول الحصول على الموافقات اللازمة من الجهات ذات العلاق��.</p>
+      <p>البند الرابع: لا يجوز للطرف الثاني التنازل عن العقد أو التعامل مع جهات أخرى دون موافقة الطرف الأول، الذي يحتفظ بحق استغلال المساحات في المناسبات الوطنية والانتخابات مع تعويض الطرف الثاني بفترة بديلة.</p>
+      <p>البند الخامس: قيمة العقد ${totalAmount.toLocaleString('ar-LY')} د.ل دون طباعة، تُدفع 35% عند التوقيع والباقي على دفعتين كل شهرين، ويحق للطرف الأول إعادة التأجير بعد 30 يومًا من التأخير.</p>
+      <p>البند السادس: مدة العقد ${execDays || '—'} يومًا تبدأ من ${formatDate(startDate)} وتنتهي في ${formatDate(endDate)}، ويجوز تجديده برضى الطرفين قبل انتهائه بمدة لا تقل عن 15 يومًا وفق شروط يتم الاتفاق عليها لاحقًا.</p>
+      <p>البند السابع: في حال حدوث خلاف بين الطرفين يتم حله وديًا، وإذا تعذر ذلك يُعين طرفان محايدان لتسوية النزاع بقرار نهائي وملزم للطرفين.</p>
     </div>
-    <div class="contract-title">
-      <h2>عقد توريد مواد بناء</h2>
-      <div class="contract-number">
-        <span>رقم العقد: ${contractNumber}</span>
-        <span>التاريخ: ${dateStr}</span>
-      </div>
-    </div>
-    <div class="contract-details">
-      <div class="party-info">
-        <h3>الطرف الأول (المورد):</h3>
-        <p><strong>الاسم:</strong> شركة معرض الطاقة للمقاولات العامة</p>
-        <p><strong>العنوان:</strong> طرابلس - ليبيا</p>
-        <p><strong>الهاتف:</strong> 0913362676</p>
-      </div>
-      <div class="party-info">
-        <h3>الطرف الثاني (المشتري):</h3>
-        <p><strong>الاسم:</strong> ${buyerName}</p>
-        <p><strong>العنوان:</strong> —</p>
-        <p><strong>الهاتف:</strong> —</p>
-      </div>
-    </div>
-    <div class="contract-items">
-      <h3>بنود العقد:</h3>
-      <table class="items-table">
-        <thead><tr><th>م</th><th>الصنف</th><th>المواصفات</th><th>الكمية</th><th>الوحدة</th><th>السعر</th><th>الإجمالي</th></tr></thead>
-        <tbody>${rows}</tbody>
-        <tfoot>
-          <tr class="total-row"><td colspan="6"><strong>الإجمالي الكلي:</strong></td><td><strong>${formatCurrency(totalAmount)}</strong></td></tr>
-        </tfoot>
-      </table>
-    </div>
-    <div class="contract-terms">
-      <h3>شروط العقد:</h3>
-      <div class="terms-grid">
-        <div class="term-item"><strong>مدة التنفيذ:</strong><span>${execDays ? execDays + ' يوم' : '—'}</span></div>
-        <div class="term-item"><strong>تاريخ البداية:</strong><span>${formatDate(startDate)}</span></div>
-        <div class="term-item"><strong>تاريخ الانتهاء:</strong><span>${formatDate(endDate)}</span></div>
-        <div class="term-item"><strong>طريقة الدفع:</strong><span>تحويل بنكي</span></div>
-      </div>
-    </div>
-    <div class="additional-terms">
-      <h3>الشروط والأحكام:</h3>
-      <ul>
-        <li>يلتزم الطرف الأول بتوريد المواد حسب المواصفات المطلوبة</li>
-        <li>يحق للطرف الثاني فحص المواد قبل الاستلام</li>
-        <li>في حالة عدم مطابقة المواد للمواصفات يحق للطرف الثاني رفضها</li>
-        <li>يتحمل الطرف الأول مسؤولية نقل المواد إلى الموقع المحدد</li>
-        <li>يسري هذا العقد من تاريخ التوقيع</li>
-      </ul>
-    </div>
-    <div class="signatures-section">
-      <div class="signature-box">
-        <h4>الطرف الأول (المورد)</h4>
-        <div class="signature-line"><span>الاسم: ________________________</span></div>
-        <div class="signature-line"><span>التوقيع: ______________________</span></div>
-        <div class="signature-line"><span>التاريخ: ______________________</span></div>
-      </div>
-      <div class="signature-box">
-        <h4>الطرف الثاني (المشتري)</h4>
-        <div class="signature-line"><span>الاسم: ________________________</span></div>
-        <div class="signature-line"><span>التوقيع: ______________________</span></div>
-        <div class="signature-line"><span>التاريخ: ______________________</span></div>
-      </div>
-    </div>
-    <div class="footer-section">
-      <p>تم إنشاء هذا العقد بواسطة نظام إدارة العقود - شركة معرض الطاقة</p>
-      <p>${formatDate(new Date())}</p>
-    </div>
-  </div>
+    <div class="meta small"><div>اسم العميل: ${buyerName || '—'}</div><div>الهاتف: ${buyerPhone || '—'}</div><div>نوع الإعلان: ${adType || '—'}</div></div>
+    <div class="box-sign small"><div>الطرف الأول</div><div>الطرف الثاني</div></div>
+  </div></section>
+  <section class="page"><div class="bg" style="background-image:url(${bgPage2})"></div><div class="content">
+    <h3 class="h2">البند الثامن: المواقع المتفق عليها بين الطرفين</h3>
+    <table class="table">
+      <thead><tr><th>رقم الوحدة</th><th>صورة</th><th>المدينة</th><th>المنطقة</th><th>أقرب معلم</th><th>المقاس</th><th>الوجوه</th><th>السعر</th><th>تاريخ الانتهاء</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div></section>
   <script>window.onload=()=>{try{window.print()}catch(e){setTimeout(()=>window.print(),300)}}</script>
 </body></html>`;
                               const w = window.open('', '_blank');
