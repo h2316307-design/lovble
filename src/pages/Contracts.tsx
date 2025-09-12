@@ -581,7 +581,7 @@ export default function Contracts() {
                               const drawOpts = (font: any, size: number) => ({ font: font, size, color: rgb(0,0,0) });
                               if (helv) {
                                 p0.drawText(`إيجار لمواقع إعلانية رقم: ${contractNumber}`, { x: 40, y: height - 120, ...drawOpts(helv, 12) });
-                                p0.drawText(`التاريخ: ${dateStr}`, { x: 40, y: height - 140, ...drawOpts(helv, 11) });
+                                p0.drawText(`التا��يخ: ${dateStr}`, { x: 40, y: height - 140, ...drawOpts(helv, 11) });
                                 p0.drawText(`الطرف الأول: ${partyOne}`, { x: 40, y: height - 170, ...drawOpts(helv, 11) });
                                 p0.drawText(`الطرف الثاني: ${partyTwo}`, { x: 40, y: height - 190, ...drawOpts(helv, 11) });
                                 p0.drawText(`قيمة العقد: ${total} د.ل`, { x: 40, y: height - 210, ...drawOpts(helv, 11) });
@@ -602,12 +602,11 @@ export default function Contracts() {
 
                               const billboards = (details as any)?.billboards || (details as any)?.items || (details as any)?.billboard_ids || [];
 
-                              if (Array.isArray(billboards) && billboards.length > 0) {
-                                // header
+                              if (helv && Array.isArray(billboards) && billboards.length > 0) {
                                 p1.drawText('اللوحة - الموقع - القياس - الوجوه - تاريخ الانتهاء', { x: 40, y: startY, size: 11, font: helv, color: rgb(0,0,0) });
                                 startY -= rowHeight;
                                 for (const b of billboards) {
-                                  if (startY < 60) break; // avoid overflow
+                                  if (startY < 60) break;
                                   const id = (b as any).id || (b as any).Contract_Number || (b as any).contract_number || (b as any)['Contract Number'] || String(b);
                                   const loc = ((b as any).location || (b as any)['location'] || (b as any)['Location'] || (b as any)['Customer Name'] || '') as string;
                                   const size = ((b as any).size || (b as any)['size'] || (b as any)['Size'] || '') as string;
@@ -651,6 +650,8 @@ export default function Contracts() {
                               const dateStr = startDate ? new Date(startDate).toLocaleDateString('ar-LY', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '';
                               const totalAmount = Number((details as any)?.rent_cost ?? (details as any)['Total Rent'] ?? 0) || 0;
                               const buyerName = (details as any)?.customer_name || (details as any)['Customer Name'] || '';
+                              const adType = (details as any)?.ad_type || (details as any)['Ad Type'] || '';
+                              const buyerPhone = String((details as any)?.customer_phone || (details as any)?.phone || '');
                               const itemsArr = Array.isArray((details as any)?.billboards) ? (details as any)?.billboards : [];
                               const perItem = itemsArr.length > 0 ? totalAmount / itemsArr.length : totalAmount;
                               const execDays = (() => {
@@ -698,11 +699,11 @@ body{margin:0;font-family:'Amiri',serif;color:#111}
       <p>الطرف الثاني: ${buyerName || '—'} – هاتف: ${buyerPhone || '—'}.</p>
       <p>المقدمة: نظرًا لرغبة الطرف الثاني في استئجار مساحات إعلانية من الطرف الأول، تم الاتفاق على الشروط التالية.</p>
       <p>البند الأول: يلتزم الطرف الثاني بتجهيز التصميم في أسرع وقت وأي تأخير يعتبر مسؤوليته، وتبدأ مدة العقد من التاريخ المذكور في المادة السادسة.</p>
-      <p>البند الثاني: يلتزم الطرف الأول بطباعة وتركيب التصاميم بدقة على المساحات المتفق عليها وفق الجدول المرفق، ويتحمل الأخير تكاليف التغيير الناتجة عن الأحوال الجوية أو الحوادث.</p>
+      <p>البند الثاني: يلتزم الطرف الأول بطباعة وتركيب التصاميم بدقة على المساحات المتفق عليها وفق الجدول المرفق، ويتحمل الأ��ير تكاليف التغيير الناتجة عن الأحوال الجوية أو الحوادث.</p>
       <p>البند الثالث: في حال وقوع ظروف قاهرة تؤثر على إحدى المساحات، يتم نقل الإعلان إلى موقع بديل، ويتولى الطرف الأول الحصول على الموافقات اللازمة من الجه��ت ذات العلاقة.</p>
       <p>البند الرابع: لا يجوز للطرف الثاني التنازل عن العقد أو التعامل مع جهات أخرى دون موافقة الطرف الأول، الذي يحتفظ بحق استغلال المساحات في المناسبات الوطنية والانتخابات مع تعويض الطرف الثاني بفترة بديلة.</p>
       <p>البند الخامس: قيمة العقد ${totalAmount.toLocaleString('ar-LY')} د.ل دون طباعة، تُدفع 35% عند التوقيع والباقي على دفعتين كل شهرين، ويحق للطرف الأول إعادة التأجير بعد 30 يومًا من التأخير.</p>
-      <p>البند السادس: مدة العقد ${execDays || '—'} يومًا تبدأ من ${formatDate(startDate)} وتنتهي في ${formatDate(endDate)}، ويجوز تجديده برضى الطرفين قبل انتهائه بمدة لا تقل عن 15 يومًا وفق شروط يتم الاتفاق عليها لاحقًا.</p>
+      <p>البند السادس: مدة العقد ${execDays || '—'} يومًا تبدأ من ${formatDate(startDate)} وتنتهي في ${formatDate(endDate)}، ويجوز تجديده برضى الطرفين قبل انتها��ه بمدة لا تقل عن 15 يومًا وفق شروط يتم الاتفاق عليها لاحقًا.</p>
       <p>البند السابع: في حال حدوث خلاف بين الطرفين يتم حله وديًا، وإذا تعذر ذلك يُعين طرفان محايدان لتسوية النزاع بقرار نهائي وملزم للطرفين.</p>
     </div>
     <div class="meta small"><div>اسم العميل: ${buyerName || '—'}</div><div>الهاتف: ${buyerPhone || '—'}</div><div>نوع الإعلان: ${adType || '—'}</div></div>
