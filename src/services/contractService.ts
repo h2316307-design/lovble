@@ -80,6 +80,23 @@ export async function createContract(contractData: ContractData) {
   let contract: any = null;
   let contractError: any = null;
 
+  function formatSupabaseErr(err: any) {
+    try {
+      if (!err) return '';
+      if (typeof err === 'string') return err;
+      // Common Supabase error shape: { message, details, hint, code }
+      const out: any = {};
+      for (const k of ['message', 'details', 'hint', 'code', 'status']) {
+        if (err[k]) out[k] = err[k];
+      }
+      // include any nested error
+      if (err.error) out.nested = err.error;
+      return JSON.stringify(out);
+    } catch (e) {
+      return String(err);
+    }
+  }
+
   // محاولة الإدراج في جدول Contract أولاً
   try {
     const { data, error } = await supabase
@@ -87,12 +104,12 @@ export async function createContract(contractData: ContractData) {
       .insert(insertPayload)
       .select()
       .single();
-    
+
     contract = data;
     contractError = error;
-    
+
     if (error) {
-      console.warn('Failed to insert into Contract table:', error);
+      console.warn('Failed to insert into Contract table:', formatSupabaseErr(error));
     } else {
       console.log('Successfully inserted into Contract table:', contract);
     }
@@ -101,9 +118,10 @@ export async function createContract(contractData: ContractData) {
     contractError = e;
   }
 
-  // إذا فشل الإدراج في جدول Contract، ��رب جدول contracts
+  // إذا فشل الإدراج في جدول Contract، جرب جدول contracts
   if (contractError || !contract) {
     console.log('Trying contracts table...');
+    let contractsError: any = null;
     try {
       const contractsPayload: any = {
         customer_name: contractPayload.customer_name,
@@ -124,16 +142,19 @@ export async function createContract(contractData: ContractData) {
         .select()
         .single();
 
+      contractsError = error;
+
       if (error) {
-        console.error('Failed to insert into contracts table:', error);
+        console.error('Failed to insert into contracts table:', formatSupabaseErr(error));
         throw error;
       }
 
       contract = data;
       console.log('Successfully inserted into contracts table:', contract);
     } catch (e) {
-      console.error('Both Contract and contracts table insertion failed:', e);
-      throw new Error('فشل في حفظ العقد في قاعدة البيانات. تأكد من إعدادات قاعدة البيانات والأذونات.');
+      console.error('Both Contract and contracts table insertion failed:', formatSupabaseErr(contractError) + ' | ' + formatSupabaseErr(contractsError ?? e));
+      const details = formatSupabaseErr(contractError) + ' | ' + formatSupabaseErr(contractsError ?? e);
+      throw new Error('فشل في حفظ العقد في قاعدة البيانات. تفاصيل الخطأ: ' + details);
     }
   }
 
@@ -141,7 +162,7 @@ export async function createContract(contractData: ContractData) {
     throw new Error('فشل في إنشاء العقد');
   }
 
-  // تحديث اللوحات المرتبطة بالعقد
+  // تحديث اللوحات المرت��طة بالعقد
   if (billboard_ids && billboard_ids.length > 0) {
     console.log('Updating billboards with contract:', billboard_ids);
     
@@ -255,7 +276,7 @@ export async function getContractWithBillboards(contractId: string): Promise<any
     let contractResult: any = null;
     let contractError: any = null;
 
-    // محاولة جلب من جدول Contract أولاً
+    // م��اولة جلب من جدول Contract أولاً
     try {
       const result = await supabase
         .from('Contract')

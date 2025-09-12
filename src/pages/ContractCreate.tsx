@@ -24,7 +24,7 @@ export default function ContractCreate() {
   const [selected, setSelected] = useState<string[]>([]);
 
   // customers combobox (id+name)
-  const [customers, setCustomers] = useState<{id: string; name: string}[]>([]);
+  const [customers, setCustomers] = useState<{ id: string; name: string }[]>([]);
   const [customerOpen, setCustomerOpen] = useState(false);
   const [customerQuery, setCustomerQuery] = useState('');
   const [customerId, setCustomerId] = useState<string | null>(null);
@@ -58,7 +58,7 @@ export default function ContractCreate() {
           .select('Contract_Number')
           .order('Contract_Number', { ascending: false })
           .limit(1);
-        
+
         if (!error && data && data.length > 0) {
           const lastNumber = parseInt(data[0].Contract_Number) || 0;
           setNextContractNumber(String(lastNumber + 1));
@@ -100,8 +100,14 @@ export default function ContractCreate() {
   }, []);
 
   // derive cities and sizes
-  const cities = useMemo(() => Array.from(new Set(billboards.map(b => b.city || b.City))).filter(Boolean) as string[], [billboards]);
-  const sizes = useMemo(() => Array.from(new Set(billboards.map(b => b.size || b.Size))).filter(Boolean) as string[], [billboards]);
+  const cities = useMemo(
+    () => Array.from(new Set(billboards.map((b) => b.city || (b as any).City))).filter(Boolean) as string[],
+    [billboards]
+  );
+  const sizes = useMemo(
+    () => Array.from(new Set(billboards.map((b) => b.size || (b as any).Size))).filter(Boolean) as string[],
+    [billboards]
+  );
 
   // compute end date when start or duration changes
   useEffect(() => {
@@ -117,10 +123,10 @@ export default function ContractCreate() {
   const estimatedTotal = useMemo(() => {
     const months = Number(durationMonths || 0);
     if (!months) return 0;
-    const sel = billboards.filter(b => selected.includes(String(b.ID)));
+    const sel = billboards.filter((b) => selected.includes(String((b as any).ID)));
     return sel.reduce((acc, b) => {
       const size = (b.size || (b as any).Size || '') as string;
-      const level = (b.level || (b as any).Level) as any;
+      const level = ((b as any).level || (b as any).Level) as any;
       const price = getPriceFor(size, level, pricingCategory as CustomerType, months);
       if (price !== null) return acc + price;
       const monthly = Number((b as any).price) || 0;
@@ -140,17 +146,19 @@ export default function ContractCreate() {
 
   const discountAmount = useMemo(() => {
     if (!discountValue) return 0;
-    return discountType === 'percent' ? (baseTotal * Math.max(0, Math.min(100, discountValue)) / 100) : Math.max(0, discountValue);
+    return discountType === 'percent'
+      ? (baseTotal * Math.max(0, Math.min(100, discountValue)) / 100)
+      : Math.max(0, discountValue);
   }, [discountType, discountValue, baseTotal]);
-  
+
   const finalTotal = useMemo(() => Math.max(0, baseTotal - discountAmount), [baseTotal, discountAmount]);
 
   useEffect(() => {
     if (installments.length === 0 && finalTotal > 0) {
       const half = Math.round((finalTotal / 2) * 100) / 100;
       setInstallments([
-        { amount: half, months: 1, paymentType: 'شهري' }, 
-        { amount: finalTotal - half, months: 2, paymentType: 'شهري' }
+        { amount: half, months: 1, paymentType: 'شهري' },
+        { amount: finalTotal - half, months: 2, paymentType: 'شهري' },
       ]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -159,15 +167,16 @@ export default function ContractCreate() {
   const distributeEvenly = (count: number) => {
     count = Math.max(1, Math.min(6, Math.floor(count)));
     const even = Math.floor((finalTotal / count) * 100) / 100;
-    const list = Array.from({ length: count }).map((_, i) => ({ 
-      amount: i === count - 1 ? Math.round((finalTotal - even * (count - 1)) * 100) / 100 : even, 
+    const list = Array.from({ length: count }).map((_, i) => ({
+      amount: i === count - 1 ? Math.round((finalTotal - even * (count - 1)) * 100) / 100 : even,
       months: Math.max(1, i + 1),
-      paymentType: 'شهري'
+      paymentType: 'شهري',
     }));
     setInstallments(list);
   };
 
-  const cumulativeMonthsTo = (index: number) => installments.slice(0, index + 1).reduce((acc, it) => acc + (Number(it.months) || 0), 0);
+  const cumulativeMonthsTo = (index: number) =>
+    installments.slice(0, index + 1).reduce((acc, it) => acc + (Number(it.months) || 0), 0);
   const dueDateFor = (idx: number) => {
     if (!startDate) return '';
     const d = new Date(startDate);
@@ -182,30 +191,72 @@ export default function ContractCreate() {
     return d.toISOString().split('T')[0];
   };
 
-  // Filter logic matching ContractEdit exactly
+  // تصفية اللوحات المحسنة - إظهار اللوحات المتاحة والقريبة من الانتهاء فقط
   const filtered = useMemo(() => {
-    return billboards.filter((b) => {
-      const text = (b.name || b.Billboard_Name || '').toLowerCase();
-      const loc = (b.location || b.Nearest_Landmark || '').toLowerCase();
-      const c = (b.city || b.City || '').toString();
-      const s = (b.size || b.Size || '').toString();
-      const st = (b.status || b.Status || '').toString();
-      const matchesQ = !q || text.includes(q.toLowerCase()) || loc.includes(q.toLowerCase());
+    const today = new Date();
+    const NEAR_DAYS = 30; // قريب الانتهاء خلال 30 يوماً
+
+    const isNearExpiring = (b: any) => {
+      const raw = b.Rent_End_Date || b.rent_end_date || b.rentEndDate || b['End Date'];
+      if (!raw) return false;
+      const end = new Date(raw);
+      if (isNaN(end.getTime())) return false;
+      const diff = Math.ceil((end.getTime() - today.getTime()) / 86400000);
+      return diff > 0 && diff <= NEAR_DAYS;
+    };
+
+    const list = billboards.filter((b: any) => {
+      const text = b.name || b.Billboard_Name || '';
+      const loc = b.location || b.Nearest_Landmark || '';
+      const c = String(b.city || b.City || '');
+      const s = String(b.size || b.Size || '');
+      const st = String(b.status || b.Status || '').toLowerCase();
+
+      // التحقق من التطابق مع الفلاتر
+      const matchesQ = !q || text.toLowerCase().includes(q.toLowerCase()) || loc.toLowerCase().includes(q.toLowerCase());
       const matchesCity = city === 'all' || c === city;
       const matchesSize = size === 'all' || s === size;
-      // Match ContractEdit logic: allow selecting items already in this contract; otherwise prefer available only when status filter is 'available'
-      const isInContract = selected.includes(String(b.ID));
-      const matchesStatus = status === 'all' || (status === 'available' ? (st === 'available' || (!b.contractNumber && !b.Contract_Number) || isInContract) : true);
-      return matchesQ && matchesCity && matchesSize && matchesStatus;
+
+      // تحديد حالة اللوحة
+      const isAvailable = st === 'available' || (!b.contractNumber && !b.Contract_Number && !b.contract_number);
+      const isNear = isNearExpiring(b);
+      
+      // منطق العرض حسب فلتر الحالة
+      let shouldShow = false;
+      if (status === 'all') {
+        shouldShow = true; // عرض جميع اللوحات
+      } else if (status === 'available') {
+        shouldShow = isAvailable || isNear; // عرض المتاحة والقريبة من الانتهاء فقط
+      } else if (status === 'rented') {
+        shouldShow = !isAvailable && !isNear; // عرض المؤجرة فقط
+      }
+
+      return matchesQ && matchesCity && matchesSize && shouldShow;
     });
-  }, [billboards, q, city, size, status, selected]);
+
+    // ترتيب اللوحات: المتاحة أولاً، ثم القريبة من الانتهاء، ثم المؤجرة
+    return list.sort((a: any, b: any) => {
+      const aAvailable = (a.status || a.Status || '').toLowerCase() === 'available' || (!a.contractNumber && !a.Contract_Number);
+      const bAvailable = (b.status || b.Status || '').toLowerCase() === 'available' || (!b.contractNumber && !b.Contract_Number);
+      
+      const aNear = isNearExpiring(a);
+      const bNear = isNearExpiring(b);
+      
+      if (aAvailable && !bAvailable) return -1;
+      if (!aAvailable && bAvailable) return 1;
+      if (aNear && !bNear) return -1;
+      if (!aNear && bNear) return 1;
+      
+      return 0;
+    }).slice(0, 20); // زيادة الحد الأعلى إلى 20 عنصر
+  }, [billboards, q, city, size, status]);
 
   const toggleSelect = (b: Billboard) => {
-    const id = String(b.ID);
-    setSelected((prev) => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+    const id = String((b as any).ID);
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
-  const removeSelected = (id: string) => setSelected((prev) => prev.filter(x => x !== id));
+  const removeSelected = (id: string) => setSelected((prev) => prev.filter((x) => x !== id));
 
   const submit = async () => {
     try {
@@ -270,27 +321,27 @@ export default function ContractCreate() {
                 <p className="text-muted-foreground">لا توجد لوحات</p>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {billboards.filter(b => selected.includes(String(b.ID))).map((b) => {
+                  {billboards.filter((b) => selected.includes(String((b as any).ID))).map((b) => {
                     const months = Number(durationMonths || 0);
-                    const size = (b.size || (b as any).Size || '') as string;
-                    const level = (b.level || (b as any).Level) as any;
-                    const price = months ? getPriceFor(size, level, pricingCategory as CustomerType, months) : null;
+                    const size = (b as any).size || (b as any).Size || '';
+                    const level = (b as any).level || (b as any).Level;
+                    const price = months ? getPriceFor(size as string, level as any, pricingCategory as CustomerType, months) : null;
                     const fallback = (Number((b as any).price) || 0) * (months || 1);
                     const totalForBoard = price !== null ? price : fallback;
                     return (
-                      <Card key={b.ID} className="overflow-hidden">
+                      <Card key={(b as any).ID} className="overflow-hidden">
                         <CardContent className="p-0">
-                          {b.image && (
-                            <img src={b.image} alt={b.name || b.Billboard_Name} className="w-full h-36 object-cover" />
+                          {(b as any).image && (
+                            <img src={(b as any).image} alt={(b as any).name || (b as any).Billboard_Name} className="w-full h-36 object-cover" />
                           )}
                           <div className="p-3 flex items-start justify-between gap-3">
                             <div>
-                              <div className="font-semibold">{b.name || b.Billboard_Name}</div>
-                              <div className="text-xs text-muted-foreground">{b.location || b.Nearest_Landmark}</div>
-                              <div className="text-xs">الحجم: {b.size || b.Size} • {b.city || b.City}</div>
+                              <div className="font-semibold">{(b as any).name || (b as any).Billboard_Name}</div>
+                              <div className="text-xs text-muted-foreground">{(b as any).location || (b as any).Nearest_Landmark}</div>
+                              <div className="text-xs">الحجم: {(b as any).size || (b as any).Size} • {(b as any).city || (b as any).City}</div>
                               <div className="text-xs font-medium mt-1">السعر: {totalForBoard.toLocaleString('ar-LY')} د.ل {months ? `/${months} شهر` : ''}</div>
                             </div>
-                            <Button size="sm" variant="destructive" onClick={() => removeSelected(String(b.ID))}>
+                            <Button size="sm" variant="destructive" onClick={() => removeSelected(String((b as any).ID))}>
                               <X className="h-4 w-4" />
                             </Button>
                           </div>
@@ -321,21 +372,30 @@ export default function ContractCreate() {
                   <SelectTrigger className="w-[180px]"><SelectValue placeholder="المدينة" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">كل المدن</SelectItem>
-                    {cities.map((c) => (<SelectItem key={c} value={c}>{c}</SelectItem>))}
+                    {cities.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <Select value={size} onValueChange={setSize}>
                   <SelectTrigger className="w-[160px]"><SelectValue placeholder="المقاس" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">كل المقاسات</SelectItem>
-                    {sizes.map((s) => (<SelectItem key={s} value={s}>{s}</SelectItem>))}
+                    {sizes.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {s}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
                 <Select value={status} onValueChange={setStatus}>
                   <SelectTrigger className="w-[160px]"><SelectValue placeholder="الحالة" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">الكل</SelectItem>
-                    <SelectItem value="available">المتاحة</SelectItem>
+                    <SelectItem value="available">المتاحة فقط</SelectItem>
+                    <SelectItem value="rented">المؤجرة فقط</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -347,7 +407,7 @@ export default function ContractCreate() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Calendar className="h-5 w-5 text-primary" />
-                كل اللوحات ({filtered.length})
+                اللوحات المتاحة ({filtered.length})
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -356,23 +416,56 @@ export default function ContractCreate() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {filtered.map((b) => {
-                    const isSelected = selected.includes(String(b.ID));
-                    const st = (b.status || b.Status || '').toString();
-                    const notAvailable = st === 'rented' || (!!b.contractNumber || !!b.Contract_Number);
-                    const disabled = notAvailable && !isSelected;
+                    const isSelected = selected.includes(String((b as any).ID));
+                    const st = ((b as any).status || (b as any).Status || '').toString().toLowerCase();
+                    const hasContract = !!(b as any).contractNumber || !!(b as any).Contract_Number || !!(b as any).contract_number;
+                    const isAvailable = st === 'available' || (!hasContract && st !== 'rented');
+                    
+                    // تحديد ما إذا كانت اللوحة قريبة من الانتهاء
+                    const today = new Date();
+                    const endDate = (b as any).Rent_End_Date || (b as any).rent_end_date || (b as any).rentEndDate;
+                    const isNearExpiring = endDate ? (() => {
+                      const end = new Date(endDate);
+                      if (isNaN(end.getTime())) return false;
+                      const diff = Math.ceil((end.getTime() - today.getTime()) / 86400000);
+                      return diff > 0 && diff <= 30;
+                    })() : false;
+
+                    const canSelect = isAvailable || isNearExpiring || isSelected;
+                    
                     return (
-                      <Card key={b.ID} className={`overflow-hidden ${disabled ? 'opacity-60' : ''}`}>
+                      <Card key={(b as any).ID} className={`overflow-hidden ${!canSelect ? 'opacity-60' : ''} ${isSelected ? 'ring-2 ring-primary' : ''}`}>
                         <CardContent className="p-0">
-                          {b.image && (
-                            <img src={b.image} alt={b.name || b.Billboard_Name} className="w-full h-40 object-cover" />
+                          {(b as any).image && (
+                            <img src={(b as any).image} alt={(b as any).name || (b as any).Billboard_Name} className="w-full h-40 object-cover" />
                           )}
                           <div className="p-3 space-y-1">
-                            <div className="font-semibold">{b.name || b.Billboard_Name}</div>
-                            <div className="text-xs text-muted-foreground">{b.location || b.Nearest_Landmark}</div>
-                            <div className="text-xs">{b.city || b.City} • {b.size || b.Size}</div>
-                            <div className="text-sm font-medium">{(Number(b.price) || 0).toLocaleString('ar-LY')} د.ل / شهر</div>
+                            <div className="font-semibold">{(b as any).name || (b as any).Billboard_Name}</div>
+                            <div className="text-xs text-muted-foreground">{(b as any).location || (b as any).Nearest_Landmark}</div>
+                            <div className="text-xs">{(b as any).city || (b as any).City} • {(b as any).size || (b as any).Size}</div>
+                            <div className="text-sm font-medium">{(Number((b as any).price) || 0).toLocaleString('ar-LY')} د.ل / شهر</div>
+                            
+                            {/* عرض حالة اللوحة */}
+                            <div className="flex items-center gap-2 text-xs">
+                              {isAvailable && (
+                                <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full">متاحة</span>
+                              )}
+                              {isNearExpiring && (
+                                <span className="bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">قريبة الانتهاء</span>
+                              )}
+                              {!isAvailable && !isNearExpiring && (
+                                <span className="bg-red-100 text-red-800 px-2 py-1 rounded-full">مؤجرة</span>
+                              )}
+                            </div>
+                            
                             <div className="pt-2">
-                              <Button size="sm" variant={isSelected ? 'destructive' : 'outline'} onClick={() => toggleSelect(b)} disabled={disabled}>
+                              <Button 
+                                size="sm" 
+                                variant={isSelected ? 'destructive' : 'outline'} 
+                                onClick={() => toggleSelect(b as any)} 
+                                disabled={!canSelect}
+                                className="w-full"
+                              >
                                 {isSelected ? 'إزالة' : 'إضافة'}
                               </Button>
                             </div>
@@ -381,6 +474,11 @@ export default function ContractCreate() {
                       </Card>
                     );
                   })}
+                </div>
+              )}
+              {!loading && filtered.length === 0 && (
+                <div className="py-10 text-center text-muted-foreground">
+                  لا توجد لوحات تطابق معايير البحث
                 </div>
               )}
             </CardContent>
@@ -392,7 +490,7 @@ export default function ContractCreate() {
           <Card className="bg-gradient-card border-0 shadow-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5 text-primary" /> 
+                <User className="h-5 w-5 text-primary" />
                 بيانات الزبون
               </CardTitle>
             </CardHeader>
@@ -410,48 +508,68 @@ export default function ContractCreate() {
                       <CommandInput placeholder="ابحث أو اكتب اسم جديد" value={customerQuery} onValueChange={setCustomerQuery} />
                       <CommandList>
                         <CommandEmpty>
-                          <Button variant="ghost" className="w-full justify-start" onClick={async () => {
-                            if (customerQuery.trim()) {
-                              const name = customerQuery.trim();
-                              try {
-                                const { data: newC, error } = await (supabase as any).from('customers').insert({ name }).select().single();
-                                if (!error && newC && (newC as any).id) {
-                                  setCustomerId((newC as any).id);
-                                  setCustomerName(name);
-                                  setCustomers(prev => [{ id: (newC as any).id, name }, ...prev]);
+                          <Button
+                            variant="ghost"
+                            className="w-full justify-start"
+                            onClick={async () => {
+                              if (customerQuery.trim()) {
+                                const name = customerQuery.trim();
+                                try {
+                                  const { data: newC, error } = await (supabase as any)
+                                    .from('customers')
+                                    .insert({ name })
+                                    .select()
+                                    .single();
+                                  if (!error && newC && (newC as any).id) {
+                                    setCustomerId((newC as any).id);
+                                    setCustomerName(name);
+                                    setCustomers((prev) => [{ id: (newC as any).id, name }, ...prev]);
+                                  }
+                                } catch (e) {
+                                  console.warn(e);
                                 }
-                              } catch (e) { console.warn(e); }
-                              setCustomerOpen(false);
-                              setCustomerQuery('');
-                            }
-                          }}>
+                                setCustomerOpen(false);
+                                setCustomerQuery('');
+                              }
+                            }}
+                          >
                             إضافة "{customerQuery}" كعميل جديد
                           </Button>
                         </CommandEmpty>
                         <CommandGroup>
                           {customers.map((c) => (
-                            <CommandItem key={c.id} value={c.name} onSelect={() => {
-                              setCustomerName(c.name);
-                              setCustomerId(c.id);
-                              setCustomerOpen(false);
-                              setCustomerQuery('');
-                            }}>
+                            <CommandItem
+                              key={c.id}
+                              value={c.name}
+                              onSelect={() => {
+                                setCustomerName(c.name);
+                                setCustomerId(c.id);
+                                setCustomerOpen(false);
+                                setCustomerQuery('');
+                              }}
+                            >
                               {c.name}
                             </CommandItem>
                           ))}
-                          {customerQuery && !customers.some(x => x.name === customerQuery.trim()) && (
+                          {customerQuery && !customers.some((x) => x.name === customerQuery.trim()) && (
                             <CommandItem
                               value={`__add_${customerQuery}`}
                               onSelect={async () => {
                                 const name = customerQuery.trim();
                                 try {
-                                  const { data: newC, error } = await (supabase as any).from('customers').insert({ name }).select().single();
+                                  const { data: newC, error } = await (supabase as any)
+                                    .from('customers')
+                                    .insert({ name })
+                                    .select()
+                                    .single();
                                   if (!error && newC && (newC as any).id) {
                                     setCustomerId((newC as any).id);
                                     setCustomerName(name);
-                                    setCustomers(prev => [{ id: (newC as any).id, name }, ...prev]);
+                                    setCustomers((prev) => [{ id: (newC as any).id, name }, ...prev]);
                                   }
-                                } catch (e) { console.warn(e); }
+                                } catch (e) {
+                                  console.warn(e);
+                                }
                                 setCustomerOpen(false);
                                 setCustomerQuery('');
                               }}
@@ -472,7 +590,9 @@ export default function ContractCreate() {
               <div>
                 <label className="text-sm">فئة السعر</label>
                 <Select value={pricingCategory} onValueChange={setPricingCategory}>
-                  <SelectTrigger><SelectValue placeholder="الفئة" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="الفئة" />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="عادي">عادي</SelectItem>
                     <SelectItem value="شركات">شركات</SelectItem>
@@ -487,7 +607,7 @@ export default function ContractCreate() {
           <Card className="bg-gradient-card border-0 shadow-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-primary" /> 
+                <Calendar className="h-5 w-5 text-primary" />
                 المدة والتواريخ
               </CardTitle>
             </CardHeader>
@@ -499,9 +619,15 @@ export default function ContractCreate() {
               <div>
                 <label className="text-sm">المدة (بالأشهر)</label>
                 <Select value={String(durationMonths)} onValueChange={(v) => setDurationMonths(Number(v))}>
-                  <SelectTrigger><SelectValue placeholder="اختر المدة" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="اختر المدة" />
+                  </SelectTrigger>
                   <SelectContent>
-                    {[1,2,3,6,12].map(m => (<SelectItem key={m} value={String(m)}>{m}</SelectItem>))}
+                    {[1, 2, 3, 6, 12].map((m) => (
+                      <SelectItem key={m} value={String(m)}>
+                        {m}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -522,33 +648,66 @@ export default function ContractCreate() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex items-center gap-2">
-                <Input type="number" min={1} max={6} placeholder="عدد الدفعات (1-6)" onChange={(e)=>distributeEvenly(parseInt(e.target.value||'1'))} />
-                <Button type="button" variant="outline" onClick={()=>distributeEvenly(3)} className="gap-2"><Calculator className="h-4 w-4"/>تقسيم تلقائي</Button>
-                <Button type="button" variant="outline" onClick={()=>setInstallments([...installments, { amount: 0, months: 1, paymentType: 'شهري' }])} className="gap-2"><PlusIcon className="h-4 w-4"/>إضافة</Button>
+                <Input
+                  type="number"
+                  min={1}
+                  max={6}
+                  placeholder="عدد الدفعات (1-6)"
+                  onChange={(e) => distributeEvenly(parseInt(e.target.value || '1'))}
+                />
+                <Button type="button" variant="outline" onClick={() => distributeEvenly(3)} className="gap-2">
+                  <Calculator className="h-4 w-4" />تقسيم تلقائي
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setInstallments([...installments, { amount: 0, months: 1, paymentType: 'شهري' }])}
+                  className="gap-2"
+                >
+                  <PlusIcon className="h-4 w-4" />إضافة
+                </Button>
               </div>
               <div className="space-y-2">
-                {installments.map((inst, idx)=> (
+                {installments.map((inst, idx) => (
                   <div key={idx} className="grid grid-cols-6 gap-2 items-center">
                     <div className="col-span-2">
                       <label className="text-xs text-muted-foreground">المبلغ</label>
-                      <Input type="number" value={inst.amount} onChange={(e)=>{
-                        const v = Number(e.target.value||0);
-                        setInstallments(list=> list.map((it,i)=> i===idx?{...it, amount: v}: it));
-                      }} />
+                      <Input
+                        type="number"
+                        value={inst.amount}
+                        onChange={(e) => {
+                          const v = Number(e.target.value || 0);
+                          setInstallments((list) => list.map((it, i) => (i === idx ? { ...it, amount: v } : it)));
+                        }}
+                      />
                     </div>
                     <div>
                       <label className="text-xs text-muted-foreground">الأشهر</label>
-                      <Select value={String(inst.months)} onValueChange={(v)=> setInstallments(list=> list.map((it,i)=> i===idx?{...it, months: parseInt(v)}: it))}>
-                        <SelectTrigger><SelectValue placeholder="الأشهر" /></SelectTrigger>
+                      <Select
+                        value={String(inst.months)}
+                        onValueChange={(v) => setInstallments((list) => list.map((it, i) => (i === idx ? { ...it, months: parseInt(v) } : it)))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="الأشهر" />
+                        </SelectTrigger>
                         <SelectContent>
-                          {[1,2,3,6,12].map(m=> (<SelectItem key={m} value={String(m)}>{m}</SelectItem>))}
+                          {[1, 2, 3, 6, 12].map((m) => (
+                            <SelectItem key={m} value={String(m)}>
+                              {m}
+                            </SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
                     <div>
                       <label className="text-xs text-muted-foreground">نوع الدفع</label>
-                      <Select value={inst.paymentType} onValueChange={(v)=> setInstallments(list=> list.map((it,i)=> i===idx?{...it, paymentType: v}: it))}>
-                        <SelectTrigger><SelectValue placeholder="النوع" /></SelectTrigger>
+                      <Select
+                        value={inst.paymentType}
+                        onValueChange={(v) => setInstallments((list) => list.map((it, i) => (i === idx ? { ...it, paymentType: v } : it)))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="النوع" />
+                        </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="شهري">شهري</SelectItem>
                           <SelectItem value="شهرين">كل شهرين</SelectItem>
@@ -561,7 +720,9 @@ export default function ContractCreate() {
                       <Input value={dueDateFor(idx)} readOnly />
                     </div>
                     <div className="flex items-end">
-                      <Button type="button" variant="destructive" onClick={()=> setInstallments(list=> list.filter((_,i)=> i!==idx))}><Trash2 className="h-4 w-4"/></Button>
+                      <Button type="button" variant="destructive" onClick={() => setInstallments((list) => list.filter((_, i) => i !== idx))}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
                 ))}
@@ -580,13 +741,22 @@ export default function ContractCreate() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={()=>setShowSettlement(s=>!s)}>تسوية العقد</Button>
-                <Button type="button" variant="outline" className="gap-2" onClick={()=>{
-                  const text = `عقد جديد\nالزبون: ${customerName}\nمن ${startDate} إلى ${endDate}\nالإجمالي: ${finalTotal.toLocaleString('ar-LY')} د.ل\nاللوحات: ${selected.length}\nالدفعات: ${installments.map((i,idx)=>`#${idx+1}:${i.amount}د.ل ${i.paymentType}`).join(' | ')}`;
-                  const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
-                  window.open(url, '_blank');
-                }}>
-                  <Send className="h-4 w-4"/> إرسال عبر الواتساب
+                <Button type="button" variant="outline" onClick={() => setShowSettlement((s) => !s)}>
+                  تسوية العقد
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => {
+                    const text = `عقد جديد\nالزبون: ${customerName}\nمن ${startDate} إلى ${endDate}\nالإجمالي: ${finalTotal.toLocaleString('ar-LY')} د.ل\nاللوحات: ${selected.length}\nالدفعات: ${installments
+                      .map((i, idx) => `#${idx + 1}:${i.amount}د.ل ${i.paymentType}`)
+                      .join(' | ')}`;
+                    const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+                    window.open(url, '_blank');
+                  }}
+                >
+                  <Send className="h-4 w-4" /> إرسال عبر الواتساب
                 </Button>
               </div>
               {showSettlement && (
@@ -594,7 +764,8 @@ export default function ContractCreate() {
                   {(() => {
                     const s = startDate ? new Date(startDate) : null;
                     const e = endDate ? new Date(endDate) : null;
-                    if (!s || !e || isNaN(s.getTime()) || isNaN(e.getTime())) return <div className="text-muted-foreground">يرجى تحديد تاريخ البداية والنهاية</div>;
+                    if (!s || !e || isNaN(s.getTime()) || isNaN(e.getTime()))
+                      return <div className="text-muted-foreground">يرجى تحديد تاريخ البداية والنهاية</div>;
                     const today = new Date();
                     const end = e < today ? e : today;
                     const totalDays = Math.max(1, Math.ceil((e.getTime() - s.getTime()) / 86400000));
@@ -603,9 +774,15 @@ export default function ContractCreate() {
                     const currentDue = Math.round(finalTotal * ratio);
                     return (
                       <div className="space-y-1">
-                        <div>تاريخ انتهاء العقد: <span className="font-medium">{endDate}</span></div>
-                        <div>الأيام المستهلكة: <span className="font-medium">{consumedDays}</span> / {totalDays}</div>
-                        <div>التكلفة الحالية عند التسوية: <span className="font-bold text-primary">{currentDue.toLocaleString('ar-LY')} د.ل</span></div>
+                        <div>
+                          تاريخ انتهاء العقد: <span className="font-medium">{endDate}</span>
+                        </div>
+                        <div>
+                          الأيام المستهلكة: <span className="font-medium">{consumedDays}</span> / {totalDays}
+                        </div>
+                        <div>
+                          التكلفة الحالية عند التسوية: <span className="font-bold text-primary">{currentDue.toLocaleString('ar-LY')} د.ل</span>
+                        </div>
                       </div>
                     );
                   })()}
@@ -616,16 +793,30 @@ export default function ContractCreate() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2"><DollarSign className="h-5 w-5" /> التكلفة</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign className="h-5 w-5" /> التكلفة
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="text-sm text-muted-foreground">تقدير تلقائي حسب الفئة والمدة: {estimatedTotal.toLocaleString('ar-LY')} د.ل</div>
-              <Input type="number" value={rentCost} onChange={(e) => { setRentCost(Number(e.target.value)); setUserEditedRentCost(true); }} placeholder="تكلفة قبل الخصم (تُحدّث تلقائياً)" />
+              <div className="text-sm text-muted-foreground">
+                تقدير تلقائي حسب الفئة والمدة: {estimatedTotal.toLocaleString('ar-LY')} د.ل
+              </div>
+              <Input
+                type="number"
+                value={rentCost}
+                onChange={(e) => {
+                  setRentCost(Number(e.target.value));
+                  setUserEditedRentCost(true);
+                }}
+                placeholder="تكلفة قبل الخصم (تُحدّث تلقائياً)"
+              />
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="text-sm">نوع الخصم</label>
                   <Select value={discountType} onValueChange={(v) => setDiscountType(v as any)}>
-                    <SelectTrigger><SelectValue placeholder="نوع الخصم" /></SelectTrigger>
+                    <SelectTrigger>
+                      <SelectValue placeholder="نوع الخصم" />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="percent">نسبة %</SelectItem>
                       <SelectItem value="amount">قيمة</SelectItem>
@@ -634,14 +825,23 @@ export default function ContractCreate() {
                 </div>
                 <div>
                   <label className="text-sm">قيمة الخصم</label>
-                  <Input type="number" value={discountValue} onChange={(e) => setDiscountValue(Number(e.target.value) || 0)} placeholder="0" />
+                  <Input
+                    type="number"
+                    value={discountValue}
+                    onChange={(e) => setDiscountValue(Number(e.target.value) || 0)}
+                    placeholder="0"
+                  />
                 </div>
               </div>
               <div className="text-sm">الإجمالي قبل الخصم: {baseTotal.toLocaleString('ar-LY')} د.ل</div>
               <div className="text-sm">الخصم: {discountAmount.toLocaleString('ar-LY')} د.ل</div>
               <div className="text-base font-semibold">الإجمالي بعد الخصم: {finalTotal.toLocaleString('ar-LY')} د.ل</div>
-              <Button className="w-full" onClick={submit}>إنشاء العقد</Button>
-              <Button variant="outline" className="w-full" onClick={() => navigate('/admin/contracts')}>إلغاء</Button>
+              <Button className="w-full" onClick={submit}>
+                إنشاء العقد
+              </Button>
+              <Button variant="outline" className="w-full" onClick={() => navigate('/admin/contracts')}>
+                إلغاء
+              </Button>
             </CardContent>
           </Card>
         </div>

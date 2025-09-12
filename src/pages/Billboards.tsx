@@ -15,7 +15,8 @@ import { BillboardGridCard } from '@/components/BillboardGridCard';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList, CommandEmpty } from '@/components/ui/command';
 import { Billboard } from '@/types';
-import { loadBillboards, searchBillboards } from '@/services/billboardService';
+import { searchBillboards } from '@/services/billboardService';
+import { fetchBillboardsWithContracts } from '@/services/billboardContractService';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 
 export default function Billboards() {
@@ -97,8 +98,7 @@ export default function Billboards() {
     } else {
       toast.success('تم حفظ التعديلات');
       try {
-        const fresh = await loadBillboards();
-        setBillboards(fresh);
+        await loadBillboards();
       } catch {}
       setEditOpen(false);
       setEditing(null);
@@ -114,8 +114,7 @@ export default function Billboards() {
       const { data, error } = await supabase.from('billboards').insert(payload).select().single();
       if (error) throw error;
       toast.success('تم إضافة اللوحة');
-      const fresh = await loadBillboards();
-      setBillboards(fresh);
+      await loadBillboards();
       setAddOpen(false);
     } catch (e:any) {
       console.error('add billboard error', e);
@@ -125,16 +124,30 @@ export default function Billboards() {
     }
   };
 
+  const loadBillboards = async () => {
+    try {
+      const data = await fetchBillboardsWithContracts();
+      setBillboards(data);
+      console.log('Loaded billboards with contracts:', data.length);
+    } catch (error) {
+      console.error('خطأ في تحميل اللوحات:', error);
+      // Fallback to basic loading
+      try {
+        const { data, error: supabaseError } = await supabase.from('billboards').select('*');
+        if (!supabaseError && data) {
+          setBillboards(data as any);
+        }
+      } catch (fallbackError) {
+        console.error('Fallback loading also failed:', fallbackError);
+      }
+    }
+  };
+
   useEffect(() => {
     const fetchBillboards = async () => {
-      try {
-        const data = await loadBillboards();
-        setBillboards(data);
-      } catch (error) {
-        console.error('خطأ في تحميل اللوحات:', error);
-      } finally {
-        setLoading(false);
-      }
+      setLoading(true);
+      await loadBillboards();
+      setLoading(false);
     };
 
     fetchBillboards();
@@ -159,6 +172,7 @@ export default function Billboards() {
   const districts = [...new Set(billboards.map(b => (b as any).District || (b as any).district).filter(Boolean))];
   const levels = [...new Set(billboards.map(b => (b as any).Level || b.level).filter(Boolean))];
   const uniqueAdTypes = [...new Set(billboards.map((b:any) => (b.Ad_Type ?? b['Ad Type'] ?? b.adType ?? '')).filter(Boolean))] as string[];
+  
   const searched = searchBillboards(billboards, searchQuery);
   const filteredBillboards = searched.filter((billboard) => {
     const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(billboard.status as any);
@@ -179,7 +193,7 @@ export default function Billboards() {
       <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">��اري تحميل اللوحات الإعلانية...</p>
+          <p className="text-muted-foreground">جاري تحميل اللوحات الإعلانية...</p>
         </div>
       </div>
     );
@@ -191,7 +205,7 @@ export default function Billboards() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">إدارة اللوحات الإعلانية</h1>
-          <p className="text-muted-foreground">عرض وإدارة جميع اللوحات الإعلانية مع إمكانية التعديل والصيانة</p>
+          <p className="text-muted-foreground">عرض وإدارة جميع اللوحات الإعلانية مع معلومات العقود المرتبطة</p>
         </div>
         <div className="flex gap-2">
           <Button onClick={() => setAddOpen(true)} className="bg-gradient-primary text-white shadow-elegant hover:shadow-glow transition-smooth">
@@ -383,7 +397,7 @@ export default function Billboards() {
             <div>
               <Label>المقاس</Label>
               <Select value={editForm.Size || ''} onValueChange={(v) => setEditForm((p: any) => ({ ...p, Size: v }))}>
-                <SelectTrigger><SelectValue placeholder="��ختر المقاس" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="اختر المقاس" /></SelectTrigger>
                 <SelectContent>
                   {sizes.map((s) => (<SelectItem key={s} value={s as string}>{s}</SelectItem>))}
                 </SelectContent>

@@ -1,9 +1,22 @@
 import { supabase } from '@/integrations/supabase/client';
 import { Billboard, Contract, Pricing } from '@/types';
 import { loadBillboards as loadBillboardsNormalized } from '@/services/billboardService';
+import { fetchBillboardsWithContracts } from '@/services/billboardContractService';
 
-// جلب جميع اللوحات
+// جلب جميع اللوحات مع بيانات العقود
 export const fetchAllBillboards = async (): Promise<Billboard[]> => {
+  try {
+    // محاولة جلب اللوحات مع العقود من Supabase أولاً
+    const billboardsWithContracts = await fetchBillboardsWithContracts();
+    if (billboardsWithContracts && billboardsWithContracts.length > 0) {
+      console.log('Fetched billboards with contracts from Supabase:', billboardsWithContracts.length);
+      return billboardsWithContracts as any;
+    }
+  } catch (error) {
+    console.warn('Failed to fetch billboards with contracts, trying legacy method:', error);
+  }
+
+  // الطريقة القديمة كـ fallback
   try {
     const { data, error } = await supabase
       .from('billboards')
@@ -21,7 +34,7 @@ export const fetchAllBillboards = async (): Promise<Billboard[]> => {
         }
       });
       const processedData = Array.from(uniqueBillboards.values());
-      console.log('Fetched unique billboards:', processedData.length);
+      console.log('Fetched unique billboards (legacy):', processedData.length);
       return processedData as any;
     }
 
@@ -258,7 +271,7 @@ export const updateBillboardStatus = async (
   }
 };
 
-// جلب الإحصائيات
+// جلب الإحصائيات مع استخدام البيانات المحسنة
 export const fetchDashboardStats = async () => {
   try {
     const [billboards, contracts] = await Promise.all([

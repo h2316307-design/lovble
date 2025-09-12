@@ -2,13 +2,22 @@ import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { MapPin, Calendar, Building, Eye } from 'lucide-react';
+import { MapPin, Calendar, Building, Eye, User, FileText, Clock } from 'lucide-react';
 import { Billboard } from '@/types';
 import { formatGregorianDate } from '@/lib/utils';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface BillboardGridCardProps {
-  billboard: Billboard;
+  billboard: Billboard & {
+    contract?: {
+      id: string;
+      customer_name: string;
+      ad_type: string;
+      start_date: string;
+      end_date: string;
+      rent_cost: number;
+    };
+  };
   onBooking?: (billboard: Billboard) => void;
   onViewDetails?: (billboard: Billboard) => void;
   showBookingActions?: boolean;
@@ -21,23 +30,39 @@ export const BillboardGridCard: React.FC<BillboardGridCardProps> = ({
   showBookingActions = true
 }) => {
   const { isAdmin } = useAuth();
-  const isAvailable = billboard.Status === 'متاح' || billboard.Status === 'available' || !billboard.Contract_Number;
+  
+  // استخدام بيانات العقد المرتبط أو البيانات المباشرة في اللوحة
+  const contractInfo = billboard.contract;
+  const customerName = contractInfo?.customer_name || billboard.Customer_Name || '';
+  const adType = contractInfo?.ad_type || '';
+  const startDate = contractInfo?.start_date || billboard.Rent_Start_Date || '';
+  const endDate = contractInfo?.end_date || billboard.Rent_End_Date || '';
+  const contractId = contractInfo?.id || billboard.Contract_Number || '';
+
+  // تحديد حالة اللوحة
+  const hasActiveContract = !!(contractInfo || billboard.Contract_Number);
+  const isAvailable = !hasActiveContract || billboard.Status === 'متاح' || billboard.Status === 'available';
   const isMaintenance = billboard.Status === 'صيانة' || billboard.Status === 'maintenance';
-  const statusLabel = isAvailable ? 'متاح' : isMaintenance ? 'صيانة' : 'محجوز';
-  const statusClass = isAvailable
-    ? 'bg-green-500 hover:bg-green-600'
-    : isMaintenance
-    ? 'bg-amber-500 hover:bg-amber-600'
-    : 'bg-red-500 hover:bg-red-600';
+  
+  let statusLabel = 'متاح';
+  let statusClass = 'bg-green-500 hover:bg-green-600';
+  
+  if (isMaintenance) {
+    statusLabel = 'صيانة';
+    statusClass = 'bg-amber-500 hover:bg-amber-600';
+  } else if (hasActiveContract && !isAvailable) {
+    statusLabel = 'محجوز';
+    statusClass = 'bg-red-500 hover:bg-red-600';
+  }
 
   // حساب الأيام المتبقية
   const getDaysRemaining = () => {
-    if (!billboard.Rent_End_Date) return null;
+    if (!endDate) return null;
 
     try {
-      const endDate = new Date(billboard.Rent_End_Date);
+      const endDateObj = new Date(endDate);
       const today = new Date();
-      const diffTime = endDate.getTime() - today.getTime();
+      const diffTime = endDateObj.getTime() - today.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
       return diffDays > 0 ? diffDays : 0;
@@ -47,12 +72,7 @@ export const BillboardGridCard: React.FC<BillboardGridCardProps> = ({
   };
 
   const daysRemaining = getDaysRemaining();
-  const isNearExpiry = daysRemaining !== null && daysRemaining <= 20;
-
-  const contractNumber = String((billboard as any).Contract_Number ?? (billboard as any)['Contract Number'] ?? '').trim();
-  const endDate = (billboard as any).Rent_End_Date ?? (billboard as any)['End Date'] ?? '';
-  const customerName = (billboard as any).Customer_Name ?? (billboard as any)['Customer Name'] ?? '';
-  const adType = (billboard as any).Ad_Type ?? (billboard as any)['Ad Type'] ?? '';
+  const isNearExpiry = daysRemaining !== null && daysRemaining <= 20 && daysRemaining > 0;
 
   return (
     <Card className="overflow-hidden rounded-2xl bg-gradient-card border-0 shadow-card hover:shadow-luxury transition-smooth">
@@ -109,7 +129,7 @@ export const BillboardGridCard: React.FC<BillboardGridCardProps> = ({
 
           {/* الموقع */}
           <div className="space-y-2 mb-4">
-            {/* السطر 1: أقرب نقطة دالة (بدلاً من المدينة) */}
+            {/* أقرب نقطة دالة */}
             {(billboard.Nearest_Landmark || billboard.District || billboard.Municipality) && (
               <div className="flex items-center text-lg text-foreground font-semibold">
                 <MapPin className="h-4 w-4 mr-2 flex-shrink-0" />
@@ -117,8 +137,7 @@ export const BillboardGridCard: React.FC<BillboardGridCardProps> = ({
               </div>
             )}
 
-
-            {/* السطر 3: المنطقة + البلدية */}
+            {/* المنطقة + البلدية */}
             {(billboard.District || billboard.Municipality) && (
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 {billboard.District && (
@@ -137,20 +156,115 @@ export const BillboardGridCard: React.FC<BillboardGridCardProps> = ({
               <span className="text-muted-foreground">عدد الأوجه:</span>{' '}
               <span className="font-medium">{billboard.Faces_Count || '1'}</span>
             </div>
-            {adType && (
-              <div>
-                <span className="text-muted-foreground">نوع الإعلان:</span>{' '}
-                <span className="font-medium">{adType}</span>
-              </div>
-            )}
           </div>
 
-          {/* معلومات العقد (تظهر للمدير فقط) */}
-          {isAdmin && (contractNumber || endDate || customerName) && (
+          {/* معلومات العقد المحسنة - تنسيق يمين ويسار */}
+          {hasActiveContract && (
+            <div className="mb-4 p-3 bg-muted/50 rounded-lg border">
+              <div className="flex items-center gap-2 mb-3">
+                <FileText className="h-4 w-4 text-primary" />
+                <span className="font-semibold text-sm">معلومات العقد</span>
+              </div>
+              
+              {/* الصف الأول: اسم العميل ورقم العقد */}
+              <div className="grid grid-cols-2 gap-4 mb-2">
+                {customerName && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <User className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                    <div className="flex flex-col">
+                      <span className="text-muted-foreground">العميل:</span>
+                      <span className="font-medium text-foreground">{customerName}</span>
+                    </div>
+                  </div>
+                )}
+                
+                {contractId && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <FileText className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                    <div className="flex flex-col">
+                      <span className="text-muted-foreground">رقم العقد:</span>
+                      <Badge variant="outline" className="text-xs w-fit">{contractId}</Badge>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* الصف الثاني: نوع الإعلان والأيام المتبقية */}
+              <div className="grid grid-cols-2 gap-4 mb-2">
+                {adType && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <Building className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                    <div className="flex flex-col">
+                      <span className="text-muted-foreground">نوع الإعلان:</span>
+                      <Badge variant="outline" className="text-xs w-fit font-medium">{adType}</Badge>
+                    </div>
+                  </div>
+                )}
+
+                {daysRemaining !== null && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <Clock className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                    <div className="flex flex-col">
+                      <span className="text-muted-foreground">متبقي:</span>
+                      <Badge 
+                        variant={isNearExpiry ? "destructive" : "secondary"} 
+                        className="text-xs w-fit"
+                      >
+                        {daysRemaining} يوم
+                      </Badge>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* الصف الثالث: تاريخ البداية والنهاية */}
+              <div className="grid grid-cols-2 gap-4">
+                {startDate && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <Calendar className="h-3 w-3 text-green-600 flex-shrink-0" />
+                    <div className="flex flex-col">
+                      <span className="text-muted-foreground">يبدأ:</span>
+                      <span className="font-medium text-foreground">{formatGregorianDate(startDate, 'ar-LY')}</span>
+                    </div>
+                  </div>
+                )}
+                
+                {endDate && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <Calendar className="h-3 w-3 text-red-600 flex-shrink-0" />
+                    <div className="flex flex-col">
+                      <span className="text-muted-foreground">ينتهي:</span>
+                      <div className="flex items-center gap-1">
+                        <span className="font-medium text-foreground">{formatGregorianDate(endDate, 'ar-LY')}</span>
+                        {isNearExpiry && (
+                          <Badge variant="outline" className="text-orange-600 border-orange-600 text-xs">
+                            قريب الانتهاء
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* قيمة الإيجار */}
+              {contractInfo?.rent_cost && (
+                <div className="mt-2 pt-2 border-t border-muted">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">قيمة الإيجار:</span>
+                    <span className="font-bold text-primary">{contractInfo.rent_cost.toLocaleString()} د.ل</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* معلومات العقد للمدير فقط (النسخة القديمة للتوافق) */}
+          {isAdmin && !hasActiveContract && (contractId || endDate || customerName) && (
             <div className="mb-4 text-xs text-muted-foreground">
               <div className="flex flex-wrap gap-2">
-                {contractNumber && (
-                  <Badge variant="outline">رقم العقد: {contractNumber}</Badge>
+                {contractId && (
+                  <Badge variant="outline">رقم العقد: {contractId}</Badge>
                 )}
                 {endDate && (
                   <Badge variant="secondary">ينتهي: {formatGregorianDate(endDate, 'ar-LY')}</Badge>
@@ -162,7 +276,7 @@ export const BillboardGridCard: React.FC<BillboardGridCardProps> = ({
             </div>
           )}
 
-          {/* أزرار الإجراءا�� */}
+          {/* أزرار الإجراءات */}
           {showBookingActions && (
             <div className="flex gap-2">
               <Button

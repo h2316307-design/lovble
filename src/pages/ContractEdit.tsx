@@ -121,8 +121,8 @@ export default function ContractEdit() {
     })();
   }, [contractNumber]);
 
-  const cities = useMemo(() => Array.from(new Set(billboards.map(b => b.city || b.City))).filter(Boolean) as string[], [billboards]);
-  const sizes = useMemo(() => Array.from(new Set(billboards.map(b => b.size || b.Size))).filter(Boolean) as string[], [billboards]);
+  const cities = useMemo(() => Array.from(new Set(billboards.map(b => (b as any).city || (b as any).City))).filter(Boolean) as string[], [billboards]);
+  const sizes = useMemo(() => Array.from(new Set(billboards.map(b => (b as any).size || (b as any).Size))).filter(Boolean) as string[], [billboards]);
 
   // compute end date automatically based on start and selected duration
   useEffect(() => {
@@ -138,10 +138,10 @@ export default function ContractEdit() {
   const estimatedTotal = useMemo(() => {
     const months = Number(durationMonths || 0);
     if (!months) return 0;
-    const sel = billboards.filter(b => selected.includes(String(b.ID)));
+    const sel = billboards.filter(b => selected.includes(String((b as any).ID)));
     return sel.reduce((acc, b) => {
-      const size = (b.size || (b as any).Size || '') as string;
-      const level = (b.level || (b as any).Level) as any;
+      const size = ((b as any).size || (b as any).Size || '') as string;
+      const level = ((b as any).level || (b as any).Level) as any;
       const price = getPriceFor(size, level, pricingCategory as CustomerType, months);
       if (price !== null) return acc + price;
       const monthly = Number((b as any).price) || 0;
@@ -166,23 +166,23 @@ export default function ContractEdit() {
 
   const filtered = useMemo(() => {
     return billboards.filter((b) => {
-      const text = (b.name || b.Billboard_Name || '').toLowerCase();
-      const loc = (b.location || b.Nearest_Landmark || '').toLowerCase();
-      const c = (b.city || b.City || '').toString();
-      const s = (b.size || b.Size || '').toString();
-      const st = (b.status || b.Status || '').toString();
+      const text = ((b as any).name || (b as any).Billboard_Name || '').toLowerCase();
+      const loc = ((b as any).location || (b as any).Nearest_Landmark || '').toLowerCase();
+      const c = ((b as any).city || (b as any).City || '').toString();
+      const s = ((b as any).size || (b as any).Size || '').toString();
+      const st = ((b as any).status || (b as any).Status || '').toString();
       const matchesQ = !q || text.includes(q.toLowerCase()) || loc.includes(q.toLowerCase());
       const matchesCity = city === 'all' || c === city;
       const matchesSize = size === 'all' || s === size;
       // allow selecting items already in this contract; otherwise prefer available only when status filter is 'available'
-      const isInContract = selected.includes(String(b.ID));
-      const matchesStatus = status === 'all' || (status === 'available' ? (st === 'available' || (!b.contractNumber && !b.Contract_Number) || isInContract) : true);
+      const isInContract = selected.includes(String((b as any).ID));
+      const matchesStatus = status === 'all' || (status === 'available' ? (st === 'available' || (!(b as any).contractNumber && !(b as any).Contract_Number) || isInContract) : true);
       return matchesQ && matchesCity && matchesSize && matchesStatus;
     });
   }, [billboards, q, city, size, status, selected]);
 
   const toggleSelect = (b: Billboard) => {
-    const id = String(b.ID);
+    const id = String((b as any).ID);
     setSelected((prev) => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
   };
 
@@ -259,27 +259,27 @@ export default function ContractEdit() {
                 <p className="text-muted-foreground">لا توجد لوحات</p>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {billboards.filter(b => selected.includes(String(b.ID))).map((b) => {
+                  {billboards.filter(b => selected.includes(String((b as any).ID))).map((b) => {
                     const months = Number(durationMonths || 0);
-                    const size = (b.size || (b as any).Size || '') as string;
-                    const level = (b.level || (b as any).Level) as any;
+                    const size = ((b as any).size || (b as any).Size || '') as string;
+                    const level = ((b as any).level || (b as any).Level) as any;
                     const price = months ? getPriceFor(size, level, pricingCategory as CustomerType, months) : null;
                     const fallback = (Number((b as any).price) || 0) * (months || 1);
                     const totalForBoard = price !== null ? price : fallback;
                     return (
-                      <Card key={b.ID} className="overflow-hidden">
+                      <Card key={(b as any).ID} className="overflow-hidden">
                         <CardContent className="p-0">
-                          {b.image && (
-                            <img src={b.image} alt={b.name || b.Billboard_Name} className="w-full h-36 object-cover" />
+                          {(b as any).image && (
+                            <img src={(b as any).image} alt={(b as any).name || (b as any).Billboard_Name} className="w-full h-36 object-cover" />
                           )}
                           <div className="p-3 flex items-start justify-between gap-3">
                             <div>
-                              <div className="font-semibold">{b.name || b.Billboard_Name}</div>
-                              <div className="text-xs text-muted-foreground">{b.location || b.Nearest_Landmark}</div>
-                              <div className="text-xs">الحجم: {b.size || b.Size} • {b.city || b.City}</div>
+                              <div className="font-semibold">{(b as any).name || (b as any).Billboard_Name}</div>
+                              <div className="text-xs text-muted-foreground">{(b as any).location || (b as any).Nearest_Landmark}</div>
+                              <div className="text-xs">الحجم: {(b as any).size || (b as any).Size} • {(b as any).city || (b as any).City}</div>
                               <div className="text-xs font-medium mt-1">السعر: {totalForBoard.toLocaleString('ar-LY')} د.ل {months ? `/${months} شهر` : ''}</div>
                             </div>
-                            <Button size="sm" variant="destructive" onClick={() => removeSelected(String(b.ID))}>
+                            <Button size="sm" variant="destructive" onClick={() => removeSelected(String((b as any).ID))}>
                               <X className="h-4 w-4" />
                             </Button>
                           </div>
@@ -341,27 +341,27 @@ export default function ContractEdit() {
             </CardHeader>
             <CardContent>
               {loading ? (
-                <div className="py-10 text-center">جاري ��لتحميل...</div>
+                <div className="py-10 text-center">جاري التحميل...</div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {filtered.map((b) => {
-                    const isSelected = selected.includes(String(b.ID));
-                    const st = (b.status || b.Status || '').toString();
-                    const notAvailable = st === 'rented' || (!!b.contractNumber || !!b.Contract_Number);
+                    const isSelected = selected.includes(String((b as any).ID));
+                    const st = ((b as any).status || (b as any).Status || '').toString();
+                    const notAvailable = st === 'rented' || (!!(b as any).contractNumber || !!(b as any).Contract_Number);
                     const disabled = notAvailable && !isSelected;
                     return (
-                      <Card key={b.ID} className={`overflow-hidden ${disabled ? 'opacity-60' : ''}`}>
+                      <Card key={(b as any).ID} className={`overflow-hidden ${disabled ? 'opacity-60' : ''}`}>
                         <CardContent className="p-0">
-                          {b.image && (
-                            <img src={b.image} alt={b.name || b.Billboard_Name} className="w-full h-40 object-cover" />
+                          {(b as any).image && (
+                            <img src={(b as any).image} alt={(b as any).name || (b as any).Billboard_Name} className="w-full h-40 object-cover" />
                           )}
                           <div className="p-3 space-y-1">
-                            <div className="font-semibold">{b.name || b.Billboard_Name}</div>
-                            <div className="text-xs text-muted-foreground">{b.location || b.Nearest_Landmark}</div>
-                            <div className="text-xs">{b.city || b.City} • {b.size || b.Size}</div>
-                            <div className="text-sm font-medium">{(Number(b.price) || 0).toLocaleString('ar-LY')} د.ل / شهر</div>
+                            <div className="font-semibold">{(b as any).name || (b as any).Billboard_Name}</div>
+                            <div className="text-xs text-muted-foreground">{(b as any).location || (b as any).Nearest_Landmark}</div>
+                            <div className="text-xs">{(b as any).city || (b as any).City} • {(b as any).size || (b as any).Size}</div>
+                            <div className="text-sm font-medium">{(Number((b as any).price) || 0).toLocaleString('ar-LY')} د.ل / شهر</div>
                             <div className="pt-2">
-                              <Button size="sm" variant={isSelected ? 'destructive' : 'outline'} onClick={() => toggleSelect(b)} disabled={disabled}>
+                              <Button size="sm" variant={isSelected ? 'destructive' : 'outline'} onClick={() => toggleSelect(b as any)} disabled={disabled}>
                                 {isSelected ? 'إزالة' : 'إضافة'}
                               </Button>
                             </div>
