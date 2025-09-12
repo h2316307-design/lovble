@@ -17,10 +17,12 @@ import PricingList from "./pages/PricingList";
 import Settings from "./pages/Settings";
 import Reports from "./pages/Reports";
 import InstallationPricing from "./pages/InstallationPricing";
+import Expenses from "./pages/Expenses";
 import Customers from "./pages/Customers";
 import BookingRequests from "./pages/BookingRequests";
 import SharedBillboards from "./pages/SharedBillboards";
 import SharedCompanies from "./pages/SharedCompanies";
+import Payments from "./pages/Payments";
 import { MainLayout } from "@/components/Layout/MainLayout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 
@@ -127,6 +129,16 @@ const App = () => (
               }
             />
             <Route
+              path="/admin/expenses"
+              element={
+                <ProtectedRoute requireAdmin>
+                  <MainLayout>
+                    <Expenses />
+                  </MainLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/admin/installation-pricing"
               element={
                 <ProtectedRoute requireAdmin>
@@ -162,6 +174,16 @@ const App = () => (
                 <ProtectedRoute requireAdmin>
                   <MainLayout>
                     <Contracts />
+                  </MainLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/payments"
+              element={
+                <ProtectedRoute requireAdmin>
+                  <MainLayout>
+                    <Payments />
                   </MainLayout>
                 </ProtectedRoute>
               }

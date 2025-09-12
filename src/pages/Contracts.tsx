@@ -515,12 +515,42 @@ export default function Contracts() {
                               setPrinting(contract.id);
                               const details = await getContractWithBillboards(String(contract.id));
 
-                              // template PDF URL (from uploaded file)
-                              const templateUrl = 'https://cdn.builder.io/o/assets%2Fb496a75bf3a847fbbb30839d00fe0721%2F66e10faf2c4d44f787d0db0b9079715c?alt=media&token=205fc1ff-ab26-46fd-bdd1-9ab5ee566add&apiKey=b496a75bf3a847fbbb30839d00fe0721';
-                              const existingPdfBytes = await fetch(templateUrl).then(r => r.arrayBuffer());
-
-                              const pdfDoc = await PDFDocument.load(existingPdfBytes);
-                              const pages = pdfDoc.getPages();
+                              // Try to build PDF with provided image as background
+                              const imgWebp = 'https://cdn.builder.io/api/v1/image/assets%2Fa966b1ba65464d5e8a07467517a60ba4%2F4ea207f0364247f1a1fb77cd2a3a851c?format=webp&width=800';
+                              let pdfDoc: PDFDocument;
+                              let pages: any[] = [];
+                              try {
+                                pdfDoc = await PDFDocument.create();
+                                const tryUrls = [
+                                  imgWebp.replace('format=webp', 'format=png').replace('width=800','width=1240'),
+                                  imgWebp.replace('format=webp', 'format=jpg').replace('width=800','width=1240'),
+                                  imgWebp,
+                                ];
+                                let img: any = null;
+                                for (const u of tryUrls) {
+                                  try {
+                                    const bytes = await fetch(u).then(r => r.arrayBuffer());
+                                    try { img = await pdfDoc.embedPng(bytes); } catch {
+                                      try { img = await pdfDoc.embedJpg(bytes); } catch {}
+                                    }
+                                    if (img) break;
+                                  } catch {}
+                                }
+                                if (!img) {
+                                  const blob = await fetch(imgWebp).then(r => r.blob());
+                                  const dataUrl: string = await new Promise((resolve) => { const fr = new FileReader(); fr.onload = () => resolve(String(fr.result)); fr.readAsDataURL(blob); });
+                                  const bytes = await fetch(dataUrl).then(r => r.arrayBuffer());
+                                  img = await pdfDoc.embedPng(bytes);
+                                }
+                                const page = pdfDoc.addPage([img.width, img.height]);
+                                page.drawImage(img, { x: 0, y: 0, width: img.width, height: img.height });
+                                pages = [page];
+                              } catch (bgErr) {
+                                const templateUrl = 'https://cdn.builder.io/o/assets%2Fb496a75bf3a847fbbb30839d00fe0721%2F66e10faf2c4d44f787d0db0b9079715c?alt=media&token=205fc1ff-ab26-46fd-bdd1-9ab5ee566add&apiKey=b496a75bf3a847fbbb30839d00fe0721';
+                                const existingPdfBytes = await fetch(templateUrl).then(r => r.arrayBuffer());
+                                pdfDoc = await PDFDocument.load(existingPdfBytes);
+                                pages = pdfDoc.getPages();
+                              }
                               // Embed a Unicode-capable Arabic font (Noto Sans Arabic)
                               const fontUrl = 'https://fonts.gstatic.com/s/noto/v14/NotoSansArabic-Regular.ttf';
                               let helv: any;

@@ -58,6 +58,16 @@ export default function Customers() {
   const [receiptNotes, setReceiptNotes] = useState('');
   const [receiptDate, setReceiptDate] = useState('');
 
+  // add invoice/receipt dialog states
+  const [addOpen, setAddOpen] = useState(false);
+  const [addType, setAddType] = useState<'invoice'|'receipt'>('invoice');
+  const [addAmount, setAddAmount] = useState('');
+  const [addMethod, setAddMethod] = useState('');
+  const [addReference, setAddReference] = useState('');
+  const [addNotes, setAddNotes] = useState('');
+  const [addDate, setAddDate] = useState<string>(()=>new Date().toISOString().slice(0,10));
+  const [addContract, setAddContract] = useState<string>('');
+
   const loadData = async () => {
     try {
       console.log('Loading data...');
@@ -472,7 +482,7 @@ export default function Customers() {
           </div>
           
           <div class="footer">
-            <p>شكراً لتعاملكم معنا</p>
+            <p>شكرا�� لتعاملكم معنا</p>
             <p>تم إنشاء هذا الإيصال في: ${new Date().toLocaleString('ar-LY')}</p>
           </div>
           
@@ -711,7 +721,7 @@ export default function Customers() {
                     </div>
                   ) : (
                     <div className="text-center py-8 text-muted-foreground">
-                      <p>لا توجد عقود مسجلة لهذا العميل</p>
+                      <p>لا ت��جد عقود مسجلة لهذا العميل</p>
                     </div>
                   )}
                 </CardContent>
@@ -719,7 +729,13 @@ export default function Customers() {
 
               <Card>
                 <CardHeader>
-                  <CardTitle>سجل الدفعات والإيصالات ({customerPayments.length})</CardTitle>
+                  <CardTitle className="flex items-center justify-between">
+                    <span>سجل الدفعات والإيصالات ({customerPayments.length})</span>
+                    <div className="flex gap-2">
+                      <Button size="sm" onClick={() => { setAddType('invoice'); setAddOpen(true); setAddAmount(''); setAddMethod(''); setAddReference(''); setAddNotes(''); setAddDate(new Date().toISOString().slice(0,10)); setAddContract(customerContracts[0]?.Contract_Number ? String(customerContracts[0]?.Contract_Number) : ''); }}>إضافة فاتورة</Button>
+                      <Button size="sm" variant="outline" onClick={() => { setAddType('receipt'); setAddOpen(true); setAddAmount(''); setAddMethod(''); setAddReference(''); setAddNotes(''); setAddDate(new Date().toISOString().slice(0,10)); setAddContract(customerContracts[0]?.Contract_Number ? String(customerContracts[0]?.Contract_Number) : ''); }}>إضافة إيصال</Button>
+                    </div>
+                  </CardTitle>
                 </CardHeader>
                 <CardContent>
                   {customerPayments.length > 0 ? (
@@ -776,6 +792,87 @@ export default function Customers() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Invoice/Receipt Dialog */}
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{addType === 'invoice' ? 'إضافة فاتورة' : 'إضافة إيصال'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div className="text-sm text-muted-foreground">العميل: {selectedCustomerName}</div>
+            <div>
+              <label className="text-sm font-medium">العقد</label>
+              <Select value={addContract} onValueChange={setAddContract}>
+                <SelectTrigger>
+                  <SelectValue placeholder="اختر عقدًا" />
+                </SelectTrigger>
+                <SelectContent className="max-h-60">
+                  {customerContracts.map((ct)=> (
+                    <SelectItem key={String(ct.Contract_Number)} value={String(ct.Contract_Number)}>{String(ct.Contract_Number)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium">المبلغ</label>
+              <Input type="number" value={addAmount} onChange={(e)=>setAddAmount(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-sm font-medium">طريقة الدفع</label>
+              <Select value={addMethod} onValueChange={setAddMethod}>
+                <SelectTrigger><SelectValue placeholder="اختر طريقة الدفع" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="نقدي">نقدي</SelectItem>
+                  <SelectItem value="تحويل بنكي">تحويل بنكي</SelectItem>
+                  <SelectItem value="شيك">شيك</SelectItem>
+                  <SelectItem value="بطاقة ائتمان">بطاقة ائتمان</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium">المرجع</label>
+              <Input value={addReference} onChange={(e)=>setAddReference(e.target.value)} placeholder="رقم المرجع أو الشيك" />
+            </div>
+            <div>
+              <label className="text-sm font-medium">التاريخ</label>
+              <Input type="date" value={addDate} onChange={(e)=>setAddDate(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-sm font-medium">ملاحظات</label>
+              <Input value={addNotes} onChange={(e)=>setAddNotes(e.target.value)} />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setAddOpen(false)}>إلغاء</Button>
+              <Button onClick={async () => {
+                try {
+                  if (!addAmount || !addContract) { toast.error('أكمل البيانات'); return; }
+                  const payload = {
+                    customer_id: customers.find(c => c.name === selectedCustomerName)?.id || (typeof selectedCustomer === 'string' && !selectedCustomer.startsWith('name:') ? selectedCustomer : null),
+                    customer_name: selectedCustomerName,
+                    contract_number: addContract || null,
+                    amount: Number(addAmount) || 0,
+                    method: addMethod || null,
+                    reference: addReference || null,
+                    notes: addNotes || null,
+                    paid_at: addDate ? new Date(addDate).toISOString() : new Date().toISOString(),
+                    entry_type: addType,
+                  } as any;
+                  const { error } = await supabase.from('customer_payments').insert(payload);
+                  if (error) { console.error(error); toast.error('فشل الحفظ'); return; }
+                  toast.success('تمت الإضافة');
+                  setAddOpen(false);
+                  if (selectedCustomer) await openCustomer(selectedCustomer);
+                  await loadData();
+                } catch (e) {
+                  console.error(e);
+                  toast.error('خطأ غير متوقع');
+                }
+              }}>حفظ</Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
