@@ -26,6 +26,7 @@ import {
 } from '@/services/contractService';
 import { Billboard } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
+import { BRAND_LOGO } from '@/lib/branding';
 
 export default function Contracts() {
   const [contracts, setContracts] = useState<Contract[]>([]);
@@ -212,7 +213,7 @@ export default function Contracts() {
     }
   };
 
-  // تصفية العقود
+  // تص��ية العقود
   const filteredContracts = contracts.filter(contract => {
     const matchesSearch = 
       contract.customer_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -632,6 +633,189 @@ export default function Contracts() {
                           className="h-8 px-2"
                         >
                           طباعة
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            try {
+                              setPrinting(contract.id);
+                              const details = await getContractWithBillboards(String(contract.id));
+                              const contractNumber = (details as any)?.Contract_Number || (details as any)['Contract Number'] || String((details as any)?.id || contract.id);
+                              const startDate = (details as any)?.start_date || (details as any)['Contract Date'] || '';
+                              const endDate = (details as any)?.end_date || (details as any)['End Date'] || '';
+                              const dateStr = startDate ? new Date(startDate).toLocaleDateString('ar-LY', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '';
+                              const totalAmount = Number((details as any)?.rent_cost ?? (details as any)['Total Rent'] ?? 0) || 0;
+                              const buyerName = (details as any)?.customer_name || (details as any)['Customer Name'] || '';
+                              const itemsArr = Array.isArray((details as any)?.billboards) ? (details as any)?.billboards : [];
+                              const perItem = itemsArr.length > 0 ? totalAmount / itemsArr.length : totalAmount;
+                              const execDays = (() => {
+                                if (!startDate || !endDate) return '';
+                                const sd = new Date(startDate).getTime();
+                                const ed = new Date(endDate).getTime();
+                                const diff = Math.max(0, Math.ceil((ed - sd) / (1000 * 60 * 60 * 24)));
+                                return String(diff);
+                              })();
+                              const formatDate = (d: any) => d ? new Date(d).toLocaleDateString('ar-LY', { year: 'numeric', month: '2-digit', day: '2-digit' }) : '';
+                              const formatCurrency = (n: number) => new Intl.NumberFormat('ar-LY', { style: 'currency', currency: 'LYD', minimumFractionDigits: 2 }).format(n || 0);
+                              const rows = itemsArr.map((b: any, idx: number) => {
+                                const name = b.Billboard_Name || b.name || `لوحة ${idx + 1}`;
+                                const specs = [b.City || b.city, b.Municipality || b.municipality, b.Size || b.size, b.Nearest_Landmark || b.location].filter(Boolean).join(' / ');
+                                const qty = 1;
+                                const unit = 'موقع';
+                                const price = perItem;
+                                const total = perItem * qty;
+                                return `<tr><td>${idx + 1}</td><td>${name}</td><td>${specs}</td><td>${qty}</td><td>${unit}</td><td>${formatCurrency(price)}</td><td>${formatCurrency(total)}</td></tr>`;
+                              }).join('');
+                              const html = `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>طباعة عقد ${contractNumber}</title><link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap" rel="stylesheet"><style>
+@import url('https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&display=swap');
+.print-container{font-family:'Amiri',serif;max-width:210mm;margin:0 auto;padding:20mm;background:white;color:#333;line-height:1.6}
+.header-section{display:flex;align-items:center;justify-content:space-between;margin-bottom:30px;border-bottom:3px solid #2c5aa0;padding-bottom:20px}
+.company-logo .logo{max-height:80px;width:auto}
+.company-info{text-align:center;flex:1}
+.company-name{font-size:28px;font-weight:700;color:#2c5aa0;margin:0 0 10px 0}
+.company-subtitle{font-size:18px;color:#666;margin:0 0 15px 0}
+.contact-info p{margin:5px 0;font-size:14px;color:#555}
+.contract-title{text-align:center;margin-bottom:30px;background:#f8f9fa;padding:20px;border-radius:8px;border:2px solid #2c5aa0}
+.contract-title h2{font-size:24px;font-weight:700;color:#2c5aa0;margin:0 0 15px 0}
+.contract-number{display:flex;justify-content:space-between;font-size:16px;font-weight:600}
+.contract-details{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-bottom:30px}
+.party-info{background:#f8f9fa;padding:20px;border-radius:8px;border-right:4px solid #2c5aa0}
+.party-info h3{font-size:18px;font-weight:700;color:#2c5aa0;margin:0 0 15px 0}
+.party-info p{margin:8px 0;font-size:14px}
+.party-info strong{color:#333;font-weight:600}
+.contract-items{margin-bottom:30px}
+.contract-items h3{font-size:20px;font-weight:700;color:#2c5aa0;margin-bottom:15px}
+.items-table{width:100%;border-collapse:collapse;margin-bottom:20px;box-shadow:0 2px 8px rgba(0,0,0,0.1)}
+.items-table th,.items-table td{border:1px solid #ddd;padding:12px 8px;text-align:center;font-size:14px}
+.items-table th{background:#2c5aa0;color:#fff;font-weight:700}
+.items-table tbody tr:nth-child(even){background:#f8f9fa}
+.items-table tbody tr:hover{background:#e9ecef}
+.total-row{background:#2c5aa0!important;color:#fff!important;font-weight:700}
+.total-row td{border-color:#2c5aa0}
+.contract-terms{margin-bottom:30px}
+.contract-terms h3{font-size:18px;font-weight:700;color:#2c5aa0;margin-bottom:15px}
+.terms-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}
+.term-item{background:#f8f9fa;padding:15px;border-radius:6px;border-right:3px solid #2c5aa0}
+.term-item strong{display:block;color:#2c5aa0;font-weight:600;margin-bottom:5px}
+.additional-terms{margin-bottom:30px}
+.additional-terms h3{font-size:18px;font-weight:700;color:#2c5aa0;margin-bottom:15px}
+.additional-terms ul{list-style:none;padding:0}
+.additional-terms li{background:#f8f9fa;margin:8px 0;padding:12px 15px;border-radius:6px;border-right:3px solid #2c5aa0;position:relative}
+.additional-terms li::before{content:"•";color:#2c5aa0;font-weight:bold;position:absolute;right:5px}
+.signatures-section{display:grid;grid-template-columns:1fr 1fr;gap:30px;margin-bottom:30px}
+.signature-box{border:2px solid #2c5aa0;border-radius:8px;padding:20px;background:#f8f9fa}
+.signature-box h4{font-size:16px;font-weight:700;color:#2c5aa0;margin:0 0 20px 0;text-align:center}
+.signature-line{margin:15px 0;padding:10px 0;border-bottom:1px solid #ccc}
+.signature-line span{font-size:14px;color:#555}
+.footer-section{text-align:center;padding-top:20px;border-top:2px solid #2c5aa0;color:#666;font-size:12px}
+.footer-section p{margin:5px 0}
+@media print{.print-container{margin:0;padding:15mm;box-shadow:none}.header-section{break-inside:avoid}.contract-title{break-inside:avoid}.items-table{break-inside:avoid}.signatures-section{break-inside:avoid;page-break-before:auto}.no-print{display:none!important}.items-table th{background:#2c5aa0!important;color:#fff!important;-webkit-print-color-adjust:exact}.total-row{background:#2c5aa0!important;color:#fff!important;-webkit-print-color-adjust:exact}}
+@media (max-width:768px){.header-section{flex-direction:column;text-align:center}.contract-details{grid-template-columns:1fr}.terms-grid{grid-template-columns:1fr}.signatures-section{grid-template-columns:1fr}.items-table{font-size:12px}.items-table th,.items-table td{padding:8px 4px}}
+.items-table{border-radius:8px;overflow:hidden}
+.items-table th:first-child,.items-table td:first-child{width:40px}
+.items-table th:nth-child(2),.items-table td:nth-child(2){width:150px;text-align:right}
+.items-table th:nth-child(3),.items-table td:nth-child(3){width:200px;text-align:right}
+.items-table th:last-child,.items-table td:last-child{width:100px;font-weight:600}
+</style></head><body>
+  <div class="print-container" dir="rtl">
+    <div class="header-section">
+      <div class="company-logo"><img src="${BRAND_LOGO}" alt="شعار الشركة" class="logo" /></div>
+      <div class="company-info">
+        <h1 class="company-name">شركة معرض الطاقة للمقاولات العامة</h1>
+        <p class="company-subtitle">للمقاولات العامة والتجارة</p>
+        <div class="contact-info">
+          <p>الهاتف: 0913362676</p>
+          <p>العنوان: طرابلس - ليبيا</p>
+        </div>
+      </div>
+    </div>
+    <div class="contract-title">
+      <h2>عقد توريد مواد بناء</h2>
+      <div class="contract-number">
+        <span>رقم العقد: ${contractNumber}</span>
+        <span>التاريخ: ${dateStr}</span>
+      </div>
+    </div>
+    <div class="contract-details">
+      <div class="party-info">
+        <h3>الطرف الأول (المورد):</h3>
+        <p><strong>الاسم:</strong> شركة معرض الطاقة للمقاولات العامة</p>
+        <p><strong>العنوان:</strong> طرابلس - ليبيا</p>
+        <p><strong>الهاتف:</strong> 0913362676</p>
+      </div>
+      <div class="party-info">
+        <h3>الطرف الثاني (المشتري):</h3>
+        <p><strong>الاسم:</strong> ${buyerName}</p>
+        <p><strong>العنوان:</strong> —</p>
+        <p><strong>الهاتف:</strong> —</p>
+      </div>
+    </div>
+    <div class="contract-items">
+      <h3>بنود العقد:</h3>
+      <table class="items-table">
+        <thead><tr><th>م</th><th>الصنف</th><th>المواصفات</th><th>الكمية</th><th>الوحدة</th><th>السعر</th><th>الإجمالي</th></tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot>
+          <tr class="total-row"><td colspan="6"><strong>الإجمالي الكلي:</strong></td><td><strong>${formatCurrency(totalAmount)}</strong></td></tr>
+        </tfoot>
+      </table>
+    </div>
+    <div class="contract-terms">
+      <h3>شروط العقد:</h3>
+      <div class="terms-grid">
+        <div class="term-item"><strong>مدة التنفيذ:</strong><span>${execDays ? execDays + ' يوم' : '—'}</span></div>
+        <div class="term-item"><strong>تاريخ البداية:</strong><span>${formatDate(startDate)}</span></div>
+        <div class="term-item"><strong>تاريخ الانتهاء:</strong><span>${formatDate(endDate)}</span></div>
+        <div class="term-item"><strong>طريقة الدفع:</strong><span>تحويل بنكي</span></div>
+      </div>
+    </div>
+    <div class="additional-terms">
+      <h3>الشروط والأحكام:</h3>
+      <ul>
+        <li>يلتزم الطرف الأول بتوريد المواد حسب المواصفات المطلوبة</li>
+        <li>يحق للطرف الثاني فحص المواد قبل الاستلام</li>
+        <li>في حالة عدم مطابقة المواد للمواصفات يحق للطرف الثاني رفضها</li>
+        <li>يتحمل الطرف الأول مسؤولية نقل المواد إلى الموقع المحدد</li>
+        <li>يسري هذا العقد من تاريخ التوقيع</li>
+      </ul>
+    </div>
+    <div class="signatures-section">
+      <div class="signature-box">
+        <h4>الطرف الأول (المورد)</h4>
+        <div class="signature-line"><span>الاسم: ________________________</span></div>
+        <div class="signature-line"><span>التوقيع: ______________________</span></div>
+        <div class="signature-line"><span>التاريخ: ______________________</span></div>
+      </div>
+      <div class="signature-box">
+        <h4>الطرف الثاني (المشتري)</h4>
+        <div class="signature-line"><span>الاسم: ________________________</span></div>
+        <div class="signature-line"><span>التوقيع: ______________________</span></div>
+        <div class="signature-line"><span>التاريخ: ______________________</span></div>
+      </div>
+    </div>
+    <div class="footer-section">
+      <p>تم إنشاء هذا العقد بواسطة نظام إدارة العقود - شركة معرض الطاقة</p>
+      <p>${formatDate(new Date())}</p>
+    </div>
+  </div>
+  <script>window.onload=()=>{try{window.print()}catch(e){setTimeout(()=>window.print(),300)}}</script>
+</body></html>`;
+                              const w = window.open('', '_blank');
+                              if (!w) return;
+                              w.document.write(html);
+                              w.document.close();
+                              w.focus();
+                            } catch (e) {
+                              console.error(e);
+                              try { toast.error('فشل طباعة العقد'); } catch {}
+                            } finally {
+                              setPrinting(null);
+                            }
+                          }}
+                          className="h-8 px-2"
+                        >
+                          طباعة العقد (قالب)
                         </Button>
                       </div>
                     </TableCell>
