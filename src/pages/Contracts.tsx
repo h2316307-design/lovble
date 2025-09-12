@@ -512,6 +512,8 @@ export default function Contracts() {
                           size="sm"
                           variant="ghost"
                           onClick={async () => {
+                            const w = window.open('', '_blank');
+                            if (!w) { alert('يرجى السماح بالنوافذ المنبثقة للطباعة'); return; }
                             try {
                               setPrinting(contract.id);
                               const details = await getContractWithBillboards(String(contract.id));
@@ -621,7 +623,7 @@ export default function Contracts() {
                               const pdfBytes = await pdfDoc.save();
                               const blob = new Blob([pdfBytes], { type: 'application/pdf' });
                               const url = URL.createObjectURL(blob);
-                              window.open(url, '_blank');
+                              w.location.href = url;
 
                             } catch (e) {
                               console.error('print contract error', e);
@@ -638,6 +640,8 @@ export default function Contracts() {
                           size="sm"
                           variant="outline"
                           onClick={async () => {
+                            const w = window.open('', '_blank');
+                            if (!w) { alert('يرجى السماح بالنوافذ المنبثقة للطباعة'); return; }
                             try {
                               setPrinting(contract.id);
                               const details = await getContractWithBillboards(String(contract.id));
@@ -695,7 +699,7 @@ body{margin:0;font-family:'Amiri',serif;color:#111}
       <p>المقدمة: نظرًا لرغبة الطرف الثاني في استئجار مساحات إعلانية من الطرف الأول، تم الاتفاق على الشروط التالية.</p>
       <p>البند الأول: يلتزم الطرف الثاني بتجهيز التصميم في أسرع وقت وأي تأخير يعتبر مسؤوليته، وتبدأ مدة العقد من التاريخ المذكور في المادة السادسة.</p>
       <p>البند الثاني: يلتزم الطرف الأول بطباعة وتركيب التصاميم بدقة على المساحات المتفق عليها وفق الجدول المرفق، ويتحمل الأخير تكاليف التغيير الناتجة عن الأحوال الجوية أو الحوادث.</p>
-      <p>البند الثالث: في حال وقوع ظروف قاهرة تؤثر على إحدى المساحات، يتم نقل الإعلان إلى موقع بديل، ويتولى الطرف الأول الحصول على الموافقات اللازمة من الجهات ذات العلاق��.</p>
+      <p>البند الثالث: في حال وقوع ظروف قاهرة تؤثر على إحدى المساحات، يتم نقل الإعلان إلى موقع بديل، ويتولى الطرف الأول الحصول على الموافقات اللازمة من الجه��ت ذات العلاقة.</p>
       <p>البند الرابع: لا يجوز للطرف الثاني التنازل عن العقد أو التعامل مع جهات أخرى دون موافقة الطرف الأول، الذي يحتفظ بحق استغلال المساحات في المناسبات الوطنية والانتخابات مع تعويض الطرف الثاني بفترة بديلة.</p>
       <p>البند الخامس: قيمة العقد ${totalAmount.toLocaleString('ar-LY')} د.ل دون طباعة، تُدفع 35% عند التوقيع والباقي على دفعتين كل شهرين، ويحق للطرف الأول إعادة التأجير بعد 30 يومًا من التأخير.</p>
       <p>البند السادس: مدة العقد ${execDays || '—'} يومًا تبدأ من ${formatDate(startDate)} وتنتهي في ${formatDate(endDate)}، ويجوز تجديده برضى الطرفين قبل انتهائه بمدة لا تقل عن 15 يومًا وفق شروط يتم الاتفاق عليها لاحقًا.</p>
@@ -713,14 +717,13 @@ body{margin:0;font-family:'Amiri',serif;color:#111}
   </div></section>
   <script>window.onload=()=>{try{window.print()}catch(e){setTimeout(()=>window.print(),300)}}</script>
 </body></html>`;
-                              const w = window.open('', '_blank');
-                              if (!w) return;
+                              w.document.open();
                               w.document.write(html);
                               w.document.close();
                               w.focus();
                             } catch (e) {
                               console.error(e);
-                              try { toast.error('فشل طباعة العقد'); } catch {}
+                              try { toast.error('فشل ��باعة العقد'); } catch {}
                             } finally {
                               setPrinting(null);
                             }
