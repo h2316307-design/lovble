@@ -16,7 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Command, CommandGroup, CommandInput, CommandItem, CommandList, CommandEmpty } from '@/components/ui/command';
 import { Billboard } from '@/types';
 import { searchBillboards } from '@/services/billboardService';
-import { fetchBillboardsWithContracts } from '@/services/billboardContractService';
+import { fetchAllBillboards } from '@/services/supabaseService';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 
 export default function Billboards() {
@@ -29,6 +29,8 @@ export default function Billboards() {
   const [sizeFilter, setSizeFilter] = useState<string>('all');
   const [municipalityFilter, setMunicipalityFilter] = useState<string>('all');
   const [adTypeFilter, setAdTypeFilter] = useState<string>('all');
+  const [selectedCustomers, setSelectedCustomers] = useState<string[]>([]);
+  const [selectedContractNumbers, setSelectedContractNumbers] = useState<string[]>([]);
   const [editOpen, setEditOpen] = useState(false);
   const [editing, setEditing] = useState<Billboard | null>(null);
   const [editForm, setEditForm] = useState<any>({});
@@ -126,20 +128,12 @@ export default function Billboards() {
 
   const loadBillboards = async () => {
     try {
-      const data = await fetchBillboardsWithContracts();
-      setBillboards(data);
-      console.log('Loaded billboards with contracts:', data.length);
+      const data = await fetchAllBillboards();
+      setBillboards(data as any);
+      console.log('Loaded billboards (with fallbacks):', data.length);
     } catch (error) {
-      console.error('خطأ في تحميل اللوحات:', error);
-      // Fallback to basic loading
-      try {
-        const { data, error: supabaseError } = await supabase.from('billboards').select('*');
-        if (!supabaseError && data) {
-          setBillboards(data as any);
-        }
-      } catch (fallbackError) {
-        console.error('Fallback loading also failed:', fallbackError);
-      }
+      console.error('خطأ في تحميل اللوحات:', (error as any)?.message || JSON.stringify(error));
+      setBillboards([] as any);
     }
   };
 
@@ -172,7 +166,9 @@ export default function Billboards() {
   const districts = [...new Set(billboards.map(b => (b as any).District || (b as any).district).filter(Boolean))];
   const levels = [...new Set(billboards.map(b => (b as any).Level || b.level).filter(Boolean))];
   const uniqueAdTypes = [...new Set(billboards.map((b:any) => (b.Ad_Type ?? b['Ad Type'] ?? b.adType ?? '')).filter(Boolean))] as string[];
-  
+  const uniqueCustomers = [...new Set(billboards.map((b:any) => (b.Customer_Name ?? b.clientName ?? b.contract?.customer_name ?? '')).filter(Boolean))] as string[];
+  const uniqueContractNumbers = [...new Set(billboards.map((b:any) => String(b.Contract_Number ?? b.contractNumber ?? '')).filter((v:string) => v && v !== 'undefined' && v !== 'null'))] as string[];
+
   const searched = searchBillboards(billboards, searchQuery);
   const filteredBillboards = searched.filter((billboard) => {
     const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(billboard.status as any);
@@ -181,7 +177,11 @@ export default function Billboards() {
     const matchesMunicipality = municipalityFilter === 'all' || ((billboard as any).Municipality || (billboard as any).municipality || '') === municipalityFilter;
     const adTypeVal = String((billboard as any).Ad_Type ?? (billboard as any)['Ad Type'] ?? (billboard as any).adType ?? '');
     const matchesAdType = adTypeFilter === 'all' || adTypeVal === adTypeFilter;
-    return matchesStatus && matchesCity && matchesSize && matchesMunicipality && matchesAdType;
+    const customerVal = String((billboard as any).Customer_Name ?? (billboard as any).clientName ?? (billboard as any).contract?.customer_name ?? '');
+    const matchesCustomer = selectedCustomers.length === 0 || selectedCustomers.includes(customerVal);
+    const contractNoVal = String((billboard as any).Contract_Number ?? (billboard as any).contractNumber ?? '');
+    const matchesContractNo = selectedContractNumbers.length === 0 || selectedContractNumbers.includes(contractNoVal);
+    return matchesStatus && matchesCity && matchesSize && matchesMunicipality && matchesAdType && matchesCustomer && matchesContractNo;
   });
 
   const totalPages = Math.max(1, Math.ceil(filteredBillboards.length / PAGE_SIZE));
@@ -295,23 +295,40 @@ export default function Billboards() {
                 </Command>
               </PopoverContent>
             </Popover>
+
+            <MultiSelect
+              options={uniqueCustomers.map((c) => ({ label: c, value: c }))}
+              value={selectedCustomers}
+              onChange={setSelectedCustomers}
+              placeholder="أسماء الزبائن (متعدد)"
+            />
+
+            <MultiSelect
+              options={uniqueContractNumbers.map((n) => ({ label: n, value: n }))}
+              value={selectedContractNumbers}
+              onChange={setSelectedContractNumbers}
+              placeholder="أرقام العقود (متعدد)"
+            />
           </div>
         </CardContent>
       </Card>
 
       {/* عرض اللوحات */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {pagedBillboards.map((billboard) => (
-          <div key={billboard.id} className="space-y-2">
-            <BillboardGridCard billboard={billboard as any} showBookingActions={false} />
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" className="flex-1" onClick={() => openEdit(billboard)}>
-                <Edit className="h-4 w-4 ml-1" />
-                تعديل
-              </Button>
+        {pagedBillboards.map((billboard, idx) => {
+          const keyVal = String((billboard as any).id ?? (billboard as any).ID ?? `${(billboard as any).Billboard_Name ?? 'bb'}-${startIndex + idx}`);
+          return (
+            <div key={keyVal} className="space-y-2">
+              <BillboardGridCard billboard={billboard as any} showBookingActions={false} />
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="flex-1" onClick={() => openEdit(billboard)}>
+                  <Edit className="h-4 w-4 ml-1" />
+                  تعديل
+                </Button>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {filteredBillboards.length > 0 && (

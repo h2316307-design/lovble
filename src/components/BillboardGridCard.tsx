@@ -33,11 +33,11 @@ export const BillboardGridCard: React.FC<BillboardGridCardProps> = ({
   
   // استخدام بيانات العقد المرتبط أو البيانات المباشرة في اللوحة
   const contractInfo = billboard.contract;
-  const customerName = contractInfo?.customer_name || billboard.Customer_Name || '';
-  const adType = contractInfo?.ad_type || '';
+  const customerName = contractInfo?.customer_name || billboard.Customer_Name || (billboard as any).clientName || '';
+  const adType = contractInfo?.ad_type || billboard.Ad_Type || (billboard as any).adType || '';
   const startDate = contractInfo?.start_date || billboard.Rent_Start_Date || '';
   const endDate = contractInfo?.end_date || billboard.Rent_End_Date || '';
-  const contractId = contractInfo?.id || billboard.Contract_Number || '';
+  const contractId = (billboard as any).Contract_Number || (billboard as any).contractNumber || contractInfo?.id || '';
 
   // تحديد حالة اللوحة
   const hasActiveContract = !!(contractInfo || billboard.Contract_Number);
