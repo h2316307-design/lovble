@@ -33,6 +33,8 @@ const Index = () => {
   const [selectedContractNumbers, setSelectedContractNumbers] = useState<string[]>([]);
   const [municipalityFilter, setMunicipalityFilter] = useState<string>('all');
   const [adTypeFilter, setAdTypeFilter] = useState<string>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 9;
 
   useEffect(() => {
     loadBillboards();
@@ -205,6 +207,21 @@ const Index = () => {
       </div>
     );
   }
+
+  // pagination computations
+  const totalPages = Math.max(1, Math.ceil(filteredBillboards.length / PAGE_SIZE));
+  const startIndex = (currentPage - 1) * PAGE_SIZE;
+  const pagedBillboards = filteredBillboards.slice(startIndex, startIndex + PAGE_SIZE);
+  const getVisiblePages = () => {
+    const windowSize = 5;
+    let start = Math.max(1, currentPage - Math.floor(windowSize / 2));
+    let end = start + windowSize - 1;
+    if (end > totalPages) {
+      end = totalPages;
+      start = Math.max(1, end - windowSize + 1);
+    }
+    return Array.from({ length: end - start + 1 }, (_, i) => start + i);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-dark" dir="rtl">
@@ -442,7 +459,7 @@ const Index = () => {
 
         {/* Billboards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredBillboards.slice(0, 10).map((billboard) => (
+          {pagedBillboards.map((billboard) => (
             <BillboardGridCard
               key={billboard.ID}
               billboard={billboard}
@@ -450,6 +467,32 @@ const Index = () => {
             />
           ))}
         </div>
+
+        {filteredBillboards.length > 0 && (
+          <div className="mt-6 flex items-center justify-center gap-2">
+            <button
+              className={`px-3 py-1 rounded border ${currentPage === 1 ? 'opacity-50 pointer-events-none' : ''}`}
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            >
+              السابق
+            </button>
+            {getVisiblePages().map((p) => (
+              <button
+                key={p}
+                onClick={() => setCurrentPage(p)}
+                className={`px-3 py-1 rounded border ${p === currentPage ? 'bg-primary text-primary-foreground' : ''}`}
+              >
+                {p}
+              </button>
+            ))}
+            <button
+              className={`px-3 py-1 rounded border ${currentPage === totalPages ? 'opacity-50 pointer-events-none' : ''}`}
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            >
+              التالي
+            </button>
+          </div>
+        )}
 
         {filteredBillboards.length === 0 && (
           <div className="text-center py-12">
