@@ -89,7 +89,7 @@ export default function Billboards() {
   const saveEdit = async () => {
     if (!editing) return;
     setSaving(true);
-    const id = editing.id;
+    const id = (editing as any).ID ?? (editing as any).id;
     const { Billboard_Name, City, Municipality, District, Nearest_Landmark, Size, Level, Image_URL, is_partnership, partner_companies, capital, capital_remaining } = editForm as any;
     const payload: any = { Billboard_Name, City, Municipality, District, Nearest_Landmark, Size, Level, Image_URL, is_partnership: !!is_partnership, partner_companies: Array.isArray(partner_companies) ? partner_companies : String(partner_companies).split(',').map(s=>s.trim()).filter(Boolean), capital: Number(capital)||0, capital_remaining: Number(capital_remaining)||Number(capital)||0 };
 
@@ -171,10 +171,11 @@ export default function Billboards() {
 
   const searched = searchBillboards(billboards, searchQuery);
   const filteredBillboards = searched.filter((billboard) => {
-    const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(billboard.status as any);
-    const matchesCity = selectedCities.length === 0 || selectedCities.includes((billboard.city || '') as any);
-    const matchesSize = sizeFilter === 'all' || ((billboard as any).Size || billboard.size) === sizeFilter;
-    const matchesMunicipality = municipalityFilter === 'all' || ((billboard as any).Municipality || (billboard as any).municipality || '') === municipalityFilter;
+    const statusValue = String(((billboard as any).Status ?? (billboard as any).status ?? '')).trim();
+    const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(statusValue);
+    const matchesCity = selectedCities.length === 0 || selectedCities.includes((billboard as any).City || billboard.city || '');
+    const matchesSize = sizeFilter === 'all' || (((billboard as any).Size || billboard.size || '') === sizeFilter);
+    const matchesMunicipality = municipalityFilter === 'all' || (((billboard as any).Municipality || (billboard as any).municipality || '') === municipalityFilter);
     const adTypeVal = String((billboard as any).Ad_Type ?? (billboard as any)['Ad Type'] ?? (billboard as any).adType ?? '');
     const matchesAdType = adTypeFilter === 'all' || adTypeVal === adTypeFilter;
     const customerVal = String((billboard as any).Customer_Name ?? (billboard as any).clientName ?? (billboard as any).contract?.customer_name ?? '');
@@ -238,9 +239,9 @@ export default function Billboards() {
             
             <MultiSelect
               options={[
-                { label: 'متاح', value: 'available' },
-                { label: 'مؤجر', value: 'rented' },
-                { label: 'صيانة', value: 'maintenance' },
+                { label: 'متاح', value: 'متاح' },
+                { label: 'مؤجر', value: 'مؤجر' },
+                { label: 'صيانة', value: 'صيانة' },
               ]}
               value={selectedStatuses}
               onChange={setSelectedStatuses}
@@ -325,6 +326,20 @@ export default function Billboards() {
                   <Edit className="h-4 w-4 ml-1" />
                   تعديل
                 </Button>
+                <Button variant="destructive" size="sm" onClick={async () => {
+                  try {
+                    if (!window.confirm('هل تريد حذف هذه اللوحة؟')) return;
+                    const bid = (billboard as any).ID ?? (billboard as any).id;
+                    const { error } = await supabase.from('billboards').delete().eq('ID', Number(bid));
+                    if (error) throw error;
+                    toast.success('تم حذف اللوحة');
+                    await loadBillboards();
+                  } catch (e:any) {
+                    toast.error(e?.message || 'فشل الحذف');
+                  }
+                }}>
+                  حذف
+                </Button>
               </div>
             </div>
           );
@@ -342,16 +357,22 @@ export default function Billboards() {
                 />
               </PaginationItem>
 
-              {Array.from({ length: totalPages }).map((_, i) => (
-                <PaginationItem key={i}>
-                  <PaginationLink
-                    isActive={currentPage === i + 1}
-                    onClick={() => setCurrentPage(i + 1)}
-                  >
-                    {i + 1}
-                  </PaginationLink>
-                </PaginationItem>
-              ))}
+              {(() => {
+                const windowSize = 5;
+                let start = Math.max(1, currentPage - Math.floor(windowSize / 2));
+                let end = start + windowSize - 1;
+                if (end > totalPages) {
+                  end = totalPages;
+                  start = Math.max(1, end - windowSize + 1);
+                }
+                return Array.from({ length: end - start + 1 }, (_, idx) => start + idx).map((p) => (
+                  <PaginationItem key={p}>
+                    <PaginationLink isActive={currentPage === p} onClick={() => setCurrentPage(p)}>
+                      {p}
+                    </PaginationLink>
+                  </PaginationItem>
+                ));
+              })()}
 
               <PaginationItem>
                 <PaginationNext
@@ -387,7 +408,7 @@ export default function Billboards() {
             <div>
               <Label>المدينة</Label>
               <Select value={editForm.City || ''} onValueChange={(v) => setEditForm((p: any) => ({ ...p, City: v }))}>
-                <SelectTrigger><SelectValue placeholder="اختر المدينة" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="اخت�� المدينة" /></SelectTrigger>
                 <SelectContent>
                   {cities.map((c) => (<SelectItem key={c} value={c as string}>{c}</SelectItem>))}
                 </SelectContent>
