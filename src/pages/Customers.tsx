@@ -77,6 +77,12 @@ export default function Customers() {
   const [addDate, setAddDate] = useState<string>(()=>new Date().toISOString().slice(0,10));
   const [addContract, setAddContract] = useState<string>('');
 
+  // add previous debt dialog
+  const [addDebtOpen, setAddDebtOpen] = useState(false);
+  const [debtAmount, setDebtAmount] = useState('');
+  const [debtNotes, setDebtNotes] = useState('');
+  const [debtDate, setDebtDate] = useState<string>(()=>new Date().toISOString().slice(0,10));
+
   const loadData = async () => {
     try {
       console.log('Loading data...');
@@ -118,6 +124,18 @@ export default function Customers() {
     // load billboards for invoice builder
     fetchAllBillboards().then((b)=> setAllBillboards(b as any)).catch(()=> setAllBillboards([] as any));
   }, []);
+
+  // auto-derive size counts from selected contracts
+  useEffect(() => {
+    const sel = new Set(selectedContractsForInv);
+    const boards = allBillboards.filter((b:any)=> sel.has(String((b as any).Contract_Number||'')) && (!selectedCustomerName || String((b as any).Customer_Name||'').toLowerCase().includes(selectedCustomerName.toLowerCase())));
+    const counts: Record<string, number> = {};
+    for (const b of boards) {
+      const size = String((b as any).Size || (b as any).size || '—');
+      counts[size] = (counts[size]||0) + 1;
+    }
+    setSizeCounts(counts);
+  }, [selectedContractsForInv, allBillboards, selectedCustomerName]);
 
   // Build summary per customer using customers table, payments + contracts
   const customersSummary = useMemo(() => {
@@ -482,7 +500,7 @@ export default function Customers() {
             </div>
             ${payment.notes ? `
             <div class="row">
-              <span class="label">ملاحظات:</span>
+              <span class="label">ملاحظا��:</span>
               <span class="value">${payment.notes}</span>
             </div>
             ` : ''}
@@ -743,6 +761,7 @@ export default function Customers() {
                   <CardTitle className="flex items-center justify-between">
                     <span>سجل الدفعات والإيصالات ({customerPayments.length})</span>
                     <div className="flex gap-2">
+                      <Button size="sm" onClick={() => { setAddDebtOpen(true); setDebtAmount(''); setDebtNotes(''); setDebtDate(new Date().toISOString().slice(0,10)); }}>إضافة دين سابق</Button>
                       <Button size="sm" onClick={() => { setPrintInvOpen(true); setSelectedContractsForInv(customerContracts[0]?.Contract_Number ? [String(customerContracts[0]?.Contract_Number)] : []); }}>إضافة فاتورة طباعة</Button>
                       <Button size="sm" onClick={() => { setAddType('invoice'); setAddOpen(true); setAddAmount(''); setAddMethod(''); setAddReference(''); setAddNotes(''); setAddDate(new Date().toISOString().slice(0,10)); setAddContract(customerContracts[0]?.Contract_Number ? String(customerContracts[0]?.Contract_Number) : ''); }}>إضافة فاتورة (سجل)</Button>
                       <Button size="sm" variant="outline" onClick={() => { setAddType('receipt'); setAddOpen(true); setAddAmount(''); setAddMethod(''); setAddReference(''); setAddNotes(''); setAddDate(new Date().toISOString().slice(0,10)); setAddContract(customerContracts[0]?.Contract_Number ? String(customerContracts[0]?.Contract_Number) : ''); }}>إضافة إيصال</Button>
@@ -978,48 +997,35 @@ export default function Customers() {
 
             <div className="border rounded p-3">
               <div className="text-sm font-medium mb-2">عدد اللوحات حسب المقاس</div>
-              {(() => {
-                const sel = new Set(selectedContractsForInv);
-                const boards = allBillboards.filter((b:any)=> sel.has(String((b as any).Contract_Number||'')) && (!selectedCustomerName || String((b as any).Customer_Name||'').toLowerCase().includes(selectedCustomerName.toLowerCase())));
-                const counts: Record<string, number> = {};
-                for (const b of boards) {
-                  const size = String((b as any).Size || (b as any).size || '—');
-                  counts[size] = (counts[size]||0) + 1;
-                }
-                // initialize on first render of selection
-                if (Object.keys(sizeCounts).length === 0 && Object.keys(counts).length > 0) {
-                  setSizeCounts(counts);
-                }
-                const keys = Object.keys(sizeCounts).length ? Object.keys(sizeCounts) : Object.keys(counts);
-                return (
-                  <div className="space-y-2">
-                    {keys.length === 0 && <div className="text-sm text-muted-foreground">لا توجد لوحات للعقود المحددة</div>}
-                    {keys.map((size)=> (
-                      <div key={size} className="flex items-center gap-2">
-                        <span className="w-24">{size}</span>
-                        <Input type="number" className="w-24" value={String((sizeCounts[size]??(counts[size]||0)))} onChange={(e)=> setSizeCounts((p)=> ({...p, [size]: Math.max(0, Number(e.target.value)||0)}))} />
-                        <Button variant="outline" size="sm" onClick={()=> setSizeCounts((p)=> { const c={...p}; delete c[size]; return c; })}>إزالة</Button>
-                      </div>
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr>
+                      <th className="border px-2 py-1">المقاس</th>
+                      <th className="border px-2 py-1">الكمية</th>
+                      <th className="border px-2 py-1">إجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.keys(sizeCounts).length === 0 && (
+                      <tr>
+                        <td colSpan={3} className="text-center text-sm text-muted-foreground py-2">لا توجد لوحات للعقود المحددة</td>
+                      </tr>
+                    )}
+                    {Object.entries(sizeCounts).map(([size, qty]) => (
+                      <tr key={size}>
+                        <td className="border px-2 py-1 text-center">{size}</td>
+                        <td className="border px-2 py-1 text-center">
+                          <Input type="number" className="w-24 mx-auto" value={String(qty)} onChange={(e)=> setSizeCounts((p)=> ({...p, [size]: Math.max(0, Number(e.target.value)||0)}))} />
+                        </td>
+                        <td className="border px-2 py-1 text-center">
+                          <Button variant="outline" size="sm" onClick={()=> setSizeCounts((p)=> { const c={...p}; delete c[size]; return c; })}>حذف</Button>
+                        </td>
+                      </tr>
                     ))}
-                    <div className="flex items-center gap-2 mt-2">
-                      <Input placeholder="مقاس جديد (مثال 4x10)" className="w-40" onKeyDown={(e)=>{
-                        const el = e.target as HTMLInputElement;
-                        if (e.key === 'Enter' && el.value.trim()) {
-                          const v = el.value.trim();
-                          setSizeCounts((p)=> ({...p, [v]: (p[v]||0)+1}));
-                          el.value='';
-                        }
-                      }} />
-                      <span className="text-xs text-muted-foreground">اضغط Enter للإضافة</span>
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-
-            <div>
-              <label className="text-sm font-medium">إضافة دين سابق</label>
-              <Input type="number" value={prevDebt} onChange={(e)=> setPrevDebt(e.target.value)} placeholder="0" />
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             <div className="flex justify-end gap-2">
@@ -1044,6 +1050,57 @@ export default function Customers() {
                 const w = window.open('', '_blank');
                 if (w) { w.document.open(); w.document.write(html); w.document.close(); }
               }}>طباعة</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Previous Debt Dialog */}
+      <Dialog open={addDebtOpen} onOpenChange={setAddDebtOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>إضافة دين سابق</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div>
+              <label className="text-sm font-medium">المبلغ</label>
+              <Input type="number" value={debtAmount} onChange={(e)=> setDebtAmount(e.target.value)} placeholder="0" />
+            </div>
+            <div>
+              <label className="text-sm font-medium">ملاحظات</label>
+              <Input value={debtNotes} onChange={(e)=> setDebtNotes(e.target.value)} placeholder="ملاحظات" />
+            </div>
+            <div>
+              <label className="text-sm font-medium">التاريخ</label>
+              <Input type="date" value={debtDate} onChange={(e)=> setDebtDate(e.target.value)} />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={()=> setAddDebtOpen(false)}>إلغاء</Button>
+              <Button onClick={async ()=>{
+                try {
+                  if (!debtAmount) { toast.error('أدخل المبلغ'); return; }
+                  const payload = {
+                    customer_id: customers.find(c => c.name === selectedCustomerName)?.id || (typeof selectedCustomer === 'string' && !selectedCustomer.startsWith('name:') ? selectedCustomer : null),
+                    customer_name: selectedCustomerName,
+                    contract_number: null,
+                    amount: Number(debtAmount) || 0,
+                    method: 'دين سابق',
+                    reference: null,
+                    notes: debtNotes || null,
+                    paid_at: debtDate ? new Date(debtDate).toISOString() : new Date().toISOString(),
+                    entry_type: 'debt',
+                  } as any;
+                  const { error } = await supabase.from('customer_payments').insert(payload);
+                  if (error) { console.error(error); toast.error('فشل الحفظ'); return; }
+                  toast.success('تمت إضافة الدين');
+                  setAddDebtOpen(false);
+                  if (selectedCustomer) await openCustomer(selectedCustomer);
+                  await loadData();
+                } catch (e) {
+                  console.error(e);
+                  toast.error('خطأ غير متوقع');
+                }
+              }}>حفظ</Button>
             </div>
           </div>
         </DialogContent>
