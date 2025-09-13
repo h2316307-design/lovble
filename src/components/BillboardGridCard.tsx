@@ -1,5 +1,6 @@
 import React from 'react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { MapPin, Calendar, Building, Eye, User, FileText, Clock } from 'lucide-react';
@@ -74,16 +75,19 @@ export const BillboardGridCard: React.FC<BillboardGridCardProps> = ({
   const daysRemaining = getDaysRemaining();
   const isNearExpiry = daysRemaining !== null && daysRemaining <= 20 && daysRemaining > 0;
 
+  const [previewOpen, setPreviewOpen] = React.useState(false);
+
   return (
     <Card className="overflow-hidden rounded-2xl bg-gradient-card border-0 shadow-card hover:shadow-luxury transition-smooth">
       <div className="relative">
         {/* صورة اللوحة */}
         <div className="aspect-video bg-muted relative overflow-hidden">
           {billboard.Image_URL ? (
-            <img 
-              src={billboard.Image_URL} 
+            <img
+              src={billboard.Image_URL}
               alt={billboard.Billboard_Name}
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover cursor-zoom-in"
+              onClick={() => setPreviewOpen(true)}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-muted to-muted/60">
@@ -312,6 +316,15 @@ export const BillboardGridCard: React.FC<BillboardGridCardProps> = ({
           )}
         </CardContent>
       </div>
+
+      {/* Image Preview Dialog */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-4xl p-0">
+          {billboard.Image_URL ? (
+            <img src={billboard.Image_URL} alt={billboard.Billboard_Name} className="w-full h-auto object-contain" />
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 };
