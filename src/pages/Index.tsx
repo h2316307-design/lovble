@@ -76,9 +76,10 @@ const Index = () => {
     const adTypeVal = String((billboard as any).Ad_Type ?? (billboard as any)['Ad Type'] ?? '');
     const matchesAdType = adTypeFilter === 'all' || adTypeVal === adTypeFilter;
 
-    const isAvailable = billboard.Status === 'متاح' || billboard.Status === 'available' || !billboard.Contract_Number;
-    const isBooked = billboard.Status === 'مؤجر' || billboard.Status === 'محجوز' || billboard.Status === 'booked' || !!billboard.Contract_Number;
-    const isMaintenance = billboard.Status === 'صيانة' || billboard.Status === 'maintenance';
+    const statusVal = String((billboard as any).Status || (billboard as any).status || '').trim();
+    const isAvailable = statusVal === 'متاح' || (!billboard.Contract_Number && statusVal !== 'صيانة');
+    const isBooked = statusVal === 'مؤجر' || statusVal === 'محجوز';
+    const isMaintenance = statusVal === 'صيانة';
 
     // near expiry = within 20 days
     let isNearExpiry = false;
@@ -102,15 +103,15 @@ const Index = () => {
 
     let finalStatusMatch = false;
     if (isAdmin) {
-      if (statusFilter === 'booked') {
+      if (statusFilter === 'مؤجر') {
         finalStatusMatch = isBooked;
       } else if (statusFilter === 'all') {
         const hideBookedByDefault = q.length === 0;
         finalStatusMatch = hideBookedByDefault ? !isBooked : true;
       } else {
         finalStatusMatch = (
-          (statusFilter === 'available' && isAvailable) ||
-          (statusFilter === 'maintenance' && isMaintenance) ||
+          (statusFilter === 'متاح' && isAvailable) ||
+          (statusFilter === 'صيانة' && isMaintenance) ||
           (statusFilter === 'near-expiry' && isNearExpiry)
         );
       }
@@ -125,9 +126,9 @@ const Index = () => {
     } else {
       // الز  ار: لا تظهر المحجوز إطلاقاً حتى مع البحث، ولا تعرض القريبة الانتهاء
       if (!user) {
-        finalStatusMatch = (statusFilter === 'available' || statusFilter === 'all') ? isAvailable : false;
+        finalStatusMatch = (statusFilter === 'متاح' || statusFilter === 'all') ? isAvailable : false;
       } else {
-        if (statusFilter === 'available') {
+        if (statusFilter === 'متاح') {
           finalStatusMatch = isAvailable;
         } else if (statusFilter === 'near-expiry') {
           finalStatusMatch = isNearExpiry;
@@ -355,18 +356,18 @@ const Index = () => {
                 </SelectContent>
               </Select>
 
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <Select value={statusFilter} onValueChange={(v)=>{ setStatusFilter(v); setCurrentPage(1); }}>
                 <SelectTrigger>
                   <SelectValue placeholder="حالة اللوحة" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">جميع الحالات</SelectItem>
-                  <SelectItem value="available">متاحة</SelectItem>
+                  <SelectItem value="متاح">متاحة</SelectItem>
                   <SelectItem value="near-expiry">قريبة الانتهاء</SelectItem>
                   {isAdmin && (
                     <>
-                      <SelectItem value="booked">محجوزة</SelectItem>
-                      <SelectItem value="maintenance">صيانة</SelectItem>
+                      <SelectItem value="مؤجر">مؤجرة</SelectItem>
+                      <SelectItem value="صيانة">صيانة</SelectItem>
                     </>
                   )}
                 </SelectContent>
