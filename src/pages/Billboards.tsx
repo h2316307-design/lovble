@@ -171,10 +171,11 @@ export default function Billboards() {
 
   const searched = searchBillboards(billboards, searchQuery);
   const filteredBillboards = searched.filter((billboard) => {
-    const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(billboard.status as any);
-    const matchesCity = selectedCities.length === 0 || selectedCities.includes((billboard.city || '') as any);
-    const matchesSize = sizeFilter === 'all' || ((billboard as any).Size || billboard.size) === sizeFilter;
-    const matchesMunicipality = municipalityFilter === 'all' || ((billboard as any).Municipality || (billboard as any).municipality || '') === municipalityFilter;
+    const statusValue = String(((billboard as any).Status ?? (billboard as any).status ?? '')).trim();
+    const matchesStatus = selectedStatuses.length === 0 || selectedStatuses.includes(statusValue);
+    const matchesCity = selectedCities.length === 0 || selectedCities.includes((billboard as any).City || billboard.city || '');
+    const matchesSize = sizeFilter === 'all' || (((billboard as any).Size || billboard.size || '') === sizeFilter);
+    const matchesMunicipality = municipalityFilter === 'all' || (((billboard as any).Municipality || (billboard as any).municipality || '') === municipalityFilter);
     const adTypeVal = String((billboard as any).Ad_Type ?? (billboard as any)['Ad Type'] ?? (billboard as any).adType ?? '');
     const matchesAdType = adTypeFilter === 'all' || adTypeVal === adTypeFilter;
     const customerVal = String((billboard as any).Customer_Name ?? (billboard as any).clientName ?? (billboard as any).contract?.customer_name ?? '');
@@ -238,9 +239,9 @@ export default function Billboards() {
             
             <MultiSelect
               options={[
-                { label: 'متاح', value: 'available' },
-                { label: 'مؤجر', value: 'rented' },
-                { label: 'صيانة', value: 'maintenance' },
+                { label: 'متاح', value: 'متاح' },
+                { label: 'مؤجر', value: 'مؤجر' },
+                { label: 'صيانة', value: 'صيانة' },
               ]}
               value={selectedStatuses}
               onChange={setSelectedStatuses}
@@ -407,7 +408,7 @@ export default function Billboards() {
             <div>
               <Label>المدينة</Label>
               <Select value={editForm.City || ''} onValueChange={(v) => setEditForm((p: any) => ({ ...p, City: v }))}>
-                <SelectTrigger><SelectValue placeholder="اختر المدينة" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="اخت�� المدينة" /></SelectTrigger>
                 <SelectContent>
                   {cities.map((c) => (<SelectItem key={c} value={c as string}>{c}</SelectItem>))}
                 </SelectContent>
