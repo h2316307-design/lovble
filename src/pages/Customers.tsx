@@ -8,6 +8,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
 import { Edit, Trash2 } from 'lucide-react';
+import { Billboard } from '@/types';
+import { fetchAllBillboards } from '@/services/supabaseService';
+import { Select as UISelect, SelectContent as UISelectContent, SelectItem as UISelectItem, SelectTrigger as UISelectTrigger, SelectValue as UISelectValue } from '@/components/ui/select';
 
 interface PaymentRow {
   id: string;
@@ -40,6 +43,12 @@ export default function Customers() {
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
   const [selectedCustomerName, setSelectedCustomerName] = useState<string>('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  // print invoice dialog state
+  const [printInvOpen, setPrintInvOpen] = useState(false);
+  const [allBillboards, setAllBillboards] = useState<Billboard[]>([]);
+  const [selectedContractsForInv, setSelectedContractsForInv] = useState<string[]>([]);
+  const [sizeCounts, setSizeCounts] = useState<Record<string, number>>({});
+  const [prevDebt, setPrevDebt] = useState<string>('');
 
   // add/edit customer states
   const [newCustomerOpen, setNewCustomerOpen] = useState(false);
@@ -106,6 +115,8 @@ export default function Customers() {
 
   useEffect(() => {
     loadData();
+    // load billboards for invoice builder
+    fetchAllBillboards().then((b)=> setAllBillboards(b as any)).catch(()=> setAllBillboards([] as any));
   }, []);
 
   // Build summary per customer using customers table, payments + contracts
@@ -467,7 +478,7 @@ export default function Customers() {
             </div>
             <div class="row">
               <span class="label">التاريخ:</span>
-              <span class="value">${payment.paid_at ? new Date(payment.paid_at).toLocaleString('ar-LY') : '—'}</span>
+              <span class="value">${payment.paid_at ? new Date(payment.paid_at).toLocaleString('ar-LY') : '���'}</span>
             </div>
             ${payment.notes ? `
             <div class="row">
@@ -509,7 +520,7 @@ export default function Customers() {
     <div className="space-y-6">
       <Card className="bg-gradient-card border-0 shadow-card">
         <CardHeader>
-          <CardTitle>الزبائن — ملخص</CardTitle>
+          <CardTitle>الزبائن ��� ملخص</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
@@ -679,7 +690,7 @@ export default function Customers() {
                             <TableHead>نوع الإعلان</TableHead>
                             <TableHead>تاريخ البداية</TableHead>
                             <TableHead>تاريخ النهاية</TableHead>
-                            <TableHead>القيمة الإجمالية</TableHead>
+                            <TableHead>القي��ة الإجمالية</TableHead>
                             <TableHead>المدفوع</TableHead>
                             <TableHead>المتبقي</TableHead>
                             <TableHead>الحالة</TableHead>
@@ -732,7 +743,8 @@ export default function Customers() {
                   <CardTitle className="flex items-center justify-between">
                     <span>سجل الدفعات والإيصالات ({customerPayments.length})</span>
                     <div className="flex gap-2">
-                      <Button size="sm" onClick={() => { setAddType('invoice'); setAddOpen(true); setAddAmount(''); setAddMethod(''); setAddReference(''); setAddNotes(''); setAddDate(new Date().toISOString().slice(0,10)); setAddContract(customerContracts[0]?.Contract_Number ? String(customerContracts[0]?.Contract_Number) : ''); }}>إضافة فاتورة</Button>
+                      <Button size="sm" onClick={() => { setPrintInvOpen(true); setSelectedContractsForInv(customerContracts[0]?.Contract_Number ? [String(customerContracts[0]?.Contract_Number)] : []); }}>إضافة فاتورة طباعة</Button>
+                      <Button size="sm" onClick={() => { setAddType('invoice'); setAddOpen(true); setAddAmount(''); setAddMethod(''); setAddReference(''); setAddNotes(''); setAddDate(new Date().toISOString().slice(0,10)); setAddContract(customerContracts[0]?.Contract_Number ? String(customerContracts[0]?.Contract_Number) : ''); }}>إضافة فاتورة (سجل)</Button>
                       <Button size="sm" variant="outline" onClick={() => { setAddType('receipt'); setAddOpen(true); setAddAmount(''); setAddMethod(''); setAddReference(''); setAddNotes(''); setAddDate(new Date().toISOString().slice(0,10)); setAddContract(customerContracts[0]?.Contract_Number ? String(customerContracts[0]?.Contract_Number) : ''); }}>إضافة إيصال</Button>
                     </div>
                   </CardTitle>
@@ -799,7 +811,7 @@ export default function Customers() {
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{addType === 'invoice' ? 'إضافة فاتورة' : 'إضافة إيصال'}</DialogTitle>
+            <DialogTitle>{addType === 'invoice' ? 'إضافة فاتورة' : 'إض��فة إيصال'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 mt-4">
             <div className="text-sm text-muted-foreground">العميل: {selectedCustomerName}</div>
@@ -937,6 +949,106 @@ export default function Customers() {
           </div>
         </DialogContent>
       </Dialog>
+      {/* Print Invoice Dialog (client-side only) */}
+      <Dialog open={printInvOpen} onOpenChange={setPrintInvOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>إضافة فاتورة طباعة</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="text-sm text-muted-foreground">العميل: {selectedCustomerName}</div>
+            <div>
+              <label className="text-sm font-medium">اختر العقود (يمكن اختيار أكثر من عقد)</label>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {customerContracts.map((ct)=>{
+                  const num = String(ct.Contract_Number||'');
+                  const selected = selectedContractsForInv.includes(num);
+                  return (
+                    <button
+                      key={num}
+                      className={`px-3 py-1 rounded border ${selected ? 'bg-primary text-primary-foreground' : ''}`}
+                      onClick={() => setSelectedContractsForInv((prev)=> selected ? prev.filter(n=>n!==num) : [...prev, num])}
+                    >
+                      {num || '—'}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="border rounded p-3">
+              <div className="text-sm font-medium mb-2">عدد اللوحات حسب المقاس</div>
+              {(() => {
+                const sel = new Set(selectedContractsForInv);
+                const boards = allBillboards.filter((b:any)=> sel.has(String((b as any).Contract_Number||'')) && (!selectedCustomerName || String((b as any).Customer_Name||'').toLowerCase().includes(selectedCustomerName.toLowerCase())));
+                const counts: Record<string, number> = {};
+                for (const b of boards) {
+                  const size = String((b as any).Size || (b as any).size || '—');
+                  counts[size] = (counts[size]||0) + 1;
+                }
+                // initialize on first render of selection
+                if (Object.keys(sizeCounts).length === 0 && Object.keys(counts).length > 0) {
+                  setSizeCounts(counts);
+                }
+                const keys = Object.keys(sizeCounts).length ? Object.keys(sizeCounts) : Object.keys(counts);
+                return (
+                  <div className="space-y-2">
+                    {keys.length === 0 && <div className="text-sm text-muted-foreground">لا توجد لوحات للعقود المحددة</div>}
+                    {keys.map((size)=> (
+                      <div key={size} className="flex items-center gap-2">
+                        <span className="w-24">{size}</span>
+                        <Input type="number" className="w-24" value={String((sizeCounts[size]??(counts[size]||0)))} onChange={(e)=> setSizeCounts((p)=> ({...p, [size]: Math.max(0, Number(e.target.value)||0)}))} />
+                        <Button variant="outline" size="sm" onClick={()=> setSizeCounts((p)=> { const c={...p}; delete c[size]; return c; })}>إزالة</Button>
+                      </div>
+                    ))}
+                    <div className="flex items-center gap-2 mt-2">
+                      <Input placeholder="مقاس جديد (مثال 4x10)" className="w-40" onKeyDown={(e)=>{
+                        const el = e.target as HTMLInputElement;
+                        if (e.key === 'Enter' && el.value.trim()) {
+                          const v = el.value.trim();
+                          setSizeCounts((p)=> ({...p, [v]: (p[v]||0)+1}));
+                          el.value='';
+                        }
+                      }} />
+                      <span className="text-xs text-muted-foreground">اضغط Enter للإضافة</span>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div>
+              <label className="text-sm font-medium">إضافة دين سابق</label>
+              <Input type="number" value={prevDebt} onChange={(e)=> setPrevDebt(e.target.value)} placeholder="0" />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={()=> setPrintInvOpen(false)}>إغلاق</Button>
+              <Button onClick={()=>{
+                const items = Object.entries(sizeCounts).filter(([_,q])=> (Number(q)||0)>0);
+                const totalQty = items.reduce((s, [,q])=> s + (Number(q)||0), 0);
+                const html = `
+                <html dir="rtl"><head><meta charset="utf-8"><title>فاتورة طباعة</title>
+                <style>body{font-family:Arial,sans-serif;padding:20px;max-width:800px;margin:auto} h1{font-size:22px} table{width:100%;border-collapse:collapse;margin-top:10px} th,td{border:1px solid #ddd;padding:8px;text-align:center} .right{text-align:right}</style>
+                </head><body>
+                  <h1>فاتورة طباعة</h1>
+                  <div class="right">العميل: ${selectedCustomerName}</div>
+                  <div class="right">العقود: ${selectedContractsForInv.join(', ')||'—'}</div>
+                  <table><thead><tr><th>المقاس</th><th>الكمية</th></tr></thead><tbody>
+                    ${items.map(([s,q])=> `<tr><td>${s}</td><td>${q}</td></tr>`).join('')}
+                  </tbody></table>
+                  ${prevDebt ? `<p class="right">دين سابق: ${Number(prevDebt).toLocaleString('ar-LY')} د.ل</p>` : ''}
+                  <p class="right">إجمالي عدد اللوحات: ${totalQty}</p>
+                  <script>window.onload=function(){window.print();}</script>
+                </body></html>`;
+                const w = window.open('', '_blank');
+                if (w) { w.document.open(); w.document.write(html); w.document.close(); }
+              }}>طباعة</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
