@@ -89,7 +89,7 @@ export default function Billboards() {
   const saveEdit = async () => {
     if (!editing) return;
     setSaving(true);
-    const id = editing.id;
+    const id = (editing as any).ID ?? (editing as any).id;
     const { Billboard_Name, City, Municipality, District, Nearest_Landmark, Size, Level, Image_URL, is_partnership, partner_companies, capital, capital_remaining } = editForm as any;
     const payload: any = { Billboard_Name, City, Municipality, District, Nearest_Landmark, Size, Level, Image_URL, is_partnership: !!is_partnership, partner_companies: Array.isArray(partner_companies) ? partner_companies : String(partner_companies).split(',').map(s=>s.trim()).filter(Boolean), capital: Number(capital)||0, capital_remaining: Number(capital_remaining)||Number(capital)||0 };
 
@@ -325,6 +325,20 @@ export default function Billboards() {
                   <Edit className="h-4 w-4 ml-1" />
                   تعديل
                 </Button>
+                <Button variant="destructive" size="sm" onClick={async () => {
+                  try {
+                    if (!window.confirm('هل تريد حذف هذه اللوحة؟')) return;
+                    const bid = (billboard as any).ID ?? (billboard as any).id;
+                    const { error } = await supabase.from('billboards').delete().eq('ID', Number(bid));
+                    if (error) throw error;
+                    toast.success('تم حذف اللوحة');
+                    await loadBillboards();
+                  } catch (e:any) {
+                    toast.error(e?.message || 'فشل الحذف');
+                  }
+                }}>
+                  حذف
+                </Button>
               </div>
             </div>
           );
@@ -342,16 +356,22 @@ export default function Billboards() {
                 />
               </PaginationItem>
 
-              {Array.from({ length: totalPages }).map((_, i) => (
-                <PaginationItem key={i}>
-                  <PaginationLink
-                    isActive={currentPage === i + 1}
-                    onClick={() => setCurrentPage(i + 1)}
-                  >
-                    {i + 1}
-                  </PaginationLink>
-                </PaginationItem>
-              ))}
+              {(() => {
+                const windowSize = 5;
+                let start = Math.max(1, currentPage - Math.floor(windowSize / 2));
+                let end = start + windowSize - 1;
+                if (end > totalPages) {
+                  end = totalPages;
+                  start = Math.max(1, end - windowSize + 1);
+                }
+                return Array.from({ length: end - start + 1 }, (_, idx) => start + idx).map((p) => (
+                  <PaginationItem key={p}>
+                    <PaginationLink isActive={currentPage === p} onClick={() => setCurrentPage(p)}>
+                      {p}
+                    </PaginationLink>
+                  </PaginationItem>
+                ));
+              })()}
 
               <PaginationItem>
                 <PaginationNext
